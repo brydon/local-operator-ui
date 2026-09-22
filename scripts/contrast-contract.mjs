@@ -328,6 +328,20 @@ const KEYCAP_DELTA_E = 2.0;
  */
 const CONTROLS = [
 	{
+		name: "companion speech bubble and hide control",
+		on: GROUNDS,
+		fill: "surface",
+		border: "borderControl",
+		ink: "ink",
+	},
+	{
+		name: "companion status mark",
+		on: ["surface"],
+		fill: "accent",
+		border: "accent",
+		ink: "onAccent",
+	},
+	{
 		name: "primary button",
 		on: GROUNDS,
 		fill: "accent",

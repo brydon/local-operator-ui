@@ -64,6 +64,8 @@ export interface RaisableWindow {
  */
 export type RaiseTrigger =
 	| "initial-present"
+	| "companion-present"
+	| "companion-click"
 	| "second-instance"
 	| "banner-click"
 	| "viewer-focus"
@@ -293,6 +295,8 @@ const REFUSABLE_DELIVERY: Record<
 	// This process's own launch presenting its own window: nobody else asked, and
 	// the plan it presents under is this process's own.
 	"initial-present": "never",
+	"companion-present": "never",
+	"companion-click": "never",
 	// THE ONE REFUSAL. The residual above says what it rests on and what it cannot
 	// see.
 	"second-instance": "when-its-plan-is-silent",

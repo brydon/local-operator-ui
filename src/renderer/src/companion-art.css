@@ -1,0 +1,164 @@
+/* Original illustration pigments are intrinsic to the character, not UI roles.
+ * The enclosing controls and status text continue to use the selected theme.
+ * Ambient character motion is the scoped exception documented in
+ * docs/companion-artwork.md. The hit area never moves with the artwork. */
+.companion-art {
+	--companion-art-light: #c8fbd7;
+	display: block;
+	position: relative;
+	width: 100%;
+	height: 100%;
+	pointer-events: none;
+	user-select: none;
+}
+
+.companion-art-visual {
+	display: block;
+	position: relative;
+	width: 100%;
+	height: 100%;
+	transform-origin: 50% 90%;
+	animation: companion-art-breathe 4s ease-in-out infinite;
+}
+
+.companion-art-body {
+	display: block;
+	width: 100%;
+	height: 100%;
+	object-fit: contain;
+}
+
+.companion-art-face {
+	position: absolute;
+	color: var(--companion-art-light);
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 4;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+	filter: drop-shadow(
+		0 0 2px color-mix(in srgb, var(--companion-art-light) 40%, transparent)
+	);
+}
+
+.companion-art-sprout .companion-art-face {
+	left: 27%;
+	top: 43%;
+	width: 46%;
+	height: 28%;
+}
+
+.companion-art-hoodie .companion-art-face {
+	left: 33%;
+	top: 26%;
+	width: 32%;
+	height: 18%;
+}
+
+.companion-art-pixel .companion-art-body {
+	image-rendering: pixelated;
+}
+
+.companion-art-pixel .companion-art-face {
+	--companion-art-light: #f5e8b9;
+	left: 34%;
+	top: 29%;
+	width: 31%;
+	height: 25%;
+	stroke-linecap: square;
+	stroke-linejoin: miter;
+	filter: none;
+}
+
+.companion-art-gaze {
+	transform-origin: 50% 40%;
+	transition: transform 120ms ease, color 120ms ease;
+}
+
+.companion-art-engaged .companion-art-gaze {
+	transform: translateY(-2px);
+}
+
+.companion-art-eyes {
+	transform-origin: 50% 40%;
+}
+
+.companion-art[data-mood="idle"] .companion-art-eyes {
+	animation: companion-art-blink 6.4s ease-in-out infinite;
+}
+
+.companion-art-eye-fill,
+.companion-art-progress {
+	fill: currentColor;
+	stroke: none;
+}
+
+.companion-art-progress rect {
+	animation: companion-art-progress 1.2s ease-in-out infinite;
+}
+
+.companion-art-progress rect:nth-child(2) {
+	animation-delay: 160ms;
+}
+
+.companion-art-progress rect:nth-child(3) {
+	animation-delay: 320ms;
+}
+
+.companion-art[data-mood="offline"] .companion-art-visual {
+	animation-duration: 6s;
+}
+
+.companion-art[data-mood="attention"] .companion-art-visual,
+.companion-art[data-mood="error"] .companion-art-visual {
+	animation: none;
+}
+
+@keyframes companion-art-breathe {
+	0%,
+	100% {
+		transform: translateY(0);
+	}
+	50% {
+		transform: translateY(-2px);
+	}
+}
+
+@keyframes companion-art-blink {
+	0%,
+	43%,
+	47%,
+	100% {
+		transform: scaleY(1);
+	}
+	45% {
+		transform: scaleY(0.12);
+	}
+}
+
+@keyframes companion-art-progress {
+	0%,
+	100% {
+		opacity: 0.45;
+	}
+	50% {
+		opacity: 1;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.companion-art-visual,
+	.companion-art[data-mood] .companion-art-visual,
+	.companion-art[data-mood] .companion-art-eyes,
+	.companion-art-progress rect {
+		animation: none;
+		transform: none;
+		opacity: 1;
+	}
+
+	.companion-art-gaze,
+	.companion-art-engaged .companion-art-gaze {
+		transition: none;
+		transform: none;
+	}
+}

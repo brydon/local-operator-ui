@@ -21,6 +21,7 @@ import {
 	BACKEND_STATUS_CHANNEL,
 	BACKEND_STATUS_EVENT,
 } from "../shared/backend-status";
+import { BUILTIN_COMPANIONS } from "../shared/companion-skin";
 import {
 	type DirectoryListing,
 	type FileActionOutcome,
@@ -54,6 +55,7 @@ import {
 } from "./browser";
 import { createSessionCookieQuitHold } from "./browser/session-cookie-quit-hold";
 import { consoleCaptureUrlFor } from "./console/capture-url";
+import { DesktopCompanion } from "./desktop-companion";
 import { guardForegroundReceipts, registerDesktopIPC } from "./desktop-ipc";
 import { DesktopNotifier } from "./desktop-notifier";
 import {
@@ -373,6 +375,8 @@ function configureAboutPanel(): void {
  * macOS-only items are prepended below, and the About item carries a handler of
  * its own rather than Electron's `about` role: see the comment on it.
  */
+let desktopCompanion: DesktopCompanion | null = null;
+
 function createApplicationMenu(): void {
 	// Check if we're in development mode
 	const isDev = Boolean(process.env.ELECTRON_RENDERER_URL);
@@ -423,6 +427,59 @@ function createApplicationMenu(): void {
 		{
 			label: "View",
 			submenu: [
+				{
+					id: "desktop-companion",
+					label: "Desktop companion",
+					type: "checkbox",
+					checked: desktopCompanion?.enabled ?? true,
+					click: (item) => desktopCompanion?.setEnabled(item.checked),
+				},
+				{
+					label: "Companion character",
+					submenu: [
+						...(desktopCompanion?.characters ?? BUILTIN_COMPANIONS).map(
+							(character) => ({
+								label: character.name,
+								type: "radio" as const,
+								checked:
+									character.id ===
+									(desktopCompanion?.appearance.id ?? "sprout"),
+								click: () => desktopCompanion?.selectCharacter(character.id),
+							}),
+						),
+						{ type: "separator" as const },
+						{
+							label: "Add character…",
+							click: async () => {
+								const chosen = await dialog.showOpenDialog({
+									title: "Add a companion character",
+									buttonLabel: "Add character",
+									properties: ["openFile"],
+									filters: [
+										{
+											name: "Companion character",
+											extensions: ["json", "png"],
+										},
+									],
+								});
+								if (chosen.canceled || !chosen.filePaths[0]) return;
+								try {
+									desktopCompanion?.importCharacter(chosen.filePaths[0]);
+								} catch (error) {
+									await dialog.showMessageBox({
+										type: "error",
+										title: "Character could not be added",
+										message:
+											error instanceof Error
+												? error.message
+												: "Check the character manifest and images.",
+									});
+								}
+							},
+						},
+					],
+				},
+				{ type: "separator" as const },
 				{
 					role: "reload",
 					accelerator: "CmdOrCtrl+R",
@@ -1845,6 +1902,7 @@ app
 		 */
 		backendService.observeDesktopFeed(
 			(frame: DesktopFeedFrame) => {
+				desktopCompanion?.refresh();
 				if (frame.type === "notification") {
 					desktopNotifier.observe(frame.session_id, frame);
 					return;
@@ -1854,6 +1912,7 @@ app
 				window.webContents.send("desktop-feed-frame", frame);
 			},
 			(state: DesktopFeedState) => {
+				desktopCompanion?.refresh();
 				const window = mainWindow;
 				if (!window || window.isDestroyed()) return;
 				window.webContents.send("desktop-feed-state", state);
@@ -2716,6 +2775,11 @@ app
 
 			// Clean up update service and mainWindow reference when the window is closed
 			mainWindow.on("closed", () => {
+				// Hidden companion windows must not hold a headless QA process open.
+				if (windowLaunch.mode === "headless") {
+					desktopCompanion?.dispose();
+					desktopCompanion = null;
+				}
 				if (updateService) {
 					updateService.dispose();
 					updateService = null;
@@ -2730,8 +2794,7 @@ app
 				// session would read `current_session` as a match, skip the switch,
 				// and land the user on whatever the recreated window happened to
 				// rehydrate.
-				if (BrowserWindow.getAllWindows().length === 0)
-					viewerRecord?.noteSession("");
+				viewerRecord?.noteSession("");
 				if (heldForConversation.has(windowId)) {
 					// A held window destroyed before its conversation reported: drop the
 					// fallback timer rather than let it fire against a dead id.
@@ -3046,6 +3109,33 @@ app
 		 * and forget the others.
 		 */
 		setupMainWindowWithUpdateService(launchSession, launchCatalogue);
+		desktopCompanion = new DesktopCompanion({
+			url: new URL("companion.html", rendererUrl).href,
+			preload: join(__dirname, "../preload/companion.js"),
+			preferencesPath: join(app.getPath("userData"), "desktop-companion.json"),
+			skinsDirectory: join(app.getPath("userData"), "companions"),
+			headless: windowLaunch.mode === "headless",
+			readCatalogue: () =>
+				backendService.requestDesktop({ op: "sessions.list", limit: 500 }),
+			openChat: (sessionId) => {
+				const request: RaiseRequest = {
+					show: windowLaunch.mode === "headless" ? "never" : OPERATOR_SHOW,
+					trigger: "companion-click",
+				};
+				if (sessionId) openSessionInWindow(sessionId, request);
+				else if (mainWindow && !mainWindow.isDestroyed())
+					raiseWindow(mainWindow, request.show, request);
+				else openOwnWindow?.(request);
+			},
+			visibilityChanged: (enabled) => {
+				const item =
+					Menu.getApplicationMenu()?.getMenuItemById("desktop-companion");
+				if (item) item.checked = enabled;
+			},
+			appearanceChanged: createApplicationMenu,
+			report: (message) => logger.info(message),
+		});
+		createApplicationMenu();
 
 		app.on("activate", () => {
 			// On macOS it's common to re-create a window in the app when the
@@ -3060,7 +3150,7 @@ app
 			// would leave a real, invisible window holding whatever was parked — the
 			// queue emptied into a screen nobody can reach. The mode governs the launch;
 			// this is the other direction, and `OPERATOR_SHOW` is the plan that says so.
-			if (BrowserWindow.getAllWindows().length === 0) {
+			if (!mainWindow || mainWindow.isDestroyed()) {
 				setupMainWindowWithUpdateService(null, false, {
 					show: OPERATOR_SHOW,
 					trigger: "initial-present",
@@ -3272,6 +3362,11 @@ const holdQuitForSessionCookieSnapshot = createSessionCookieQuitHold({
 });
 
 app.on("before-quit", async (event) => {
+	// Electron closes windows before will-quit. Dispose synchronously so closing
+	// the pet during app shutdown does not persist a user's "hide companion" choice.
+	const companion = desktopCompanion;
+	desktopCompanion = null;
+	companion?.dispose();
 	/*
 	 * Hold the quit for the browser host's stop, then let the ordinary pass
 	 * through: the stop settles or the budget expires, the hold asks for the quit
