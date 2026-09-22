@@ -174,7 +174,9 @@ export class DesktopCompanion {
 			title: "Local Operator companion",
 			show: false,
 			acceptFirstMouse: true,
-			...(process.platform === "darwin" ? { type: "panel" } : {}),
+			// A macOS panel skips application activation on show/focus, so the
+			// composer can look focused while keystrokes go to another app. Use a
+			// normal window; showInactive keeps its initial presentation passive.
 			focusable: !this.options.headless,
 			frame: false,
 			transparent: true,

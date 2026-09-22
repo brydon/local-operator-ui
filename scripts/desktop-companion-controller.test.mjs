@@ -292,7 +292,7 @@ test("visible companion presents once without focus and accepts the first click"
 	assert.equal(window.options.acceptFirstMouse, true);
 	assert.equal(window.options.focusable, true);
 	assert.equal(window.workspaces[1].skipTransformProcessType, true);
-	if (process.platform === "darwin") assert.equal(window.options.type, "panel");
+	assert.equal(window.options.type, undefined);
 });
 
 test("IPC requires this companion's exact top-level document and rejects malformed actions", async (t) => {
