@@ -266,34 +266,41 @@ test("IME and Shift+Enter do not submit; regular Enter does", async () => {
 	);
 });
 
-test("new messages preserve reading position until the reader returns to the bottom", async () => {
+test("only the latest reply is shown; reading position survives rerenders and collapse", async () => {
 	await fixture(async ({ host, render }) => {
-		const viewport = host.querySelector(".companion-chat-transcript");
-		let height = 500;
-		// jsdom does not lay out text. These are explicit scroll inputs, not
-		// evidence about browser geometry or screenshot appearance.
-		Object.defineProperty(viewport, "scrollHeight", { get: () => height });
-		Object.defineProperty(viewport, "clientHeight", { value: 100 });
-		viewport.scrollTop = 100;
-		viewport.dispatchEvent(new dom.window.Event("scroll"));
-		height = 600;
+		const first = { id: "a", role: "assistant", text: "An earlier answer" };
+		await render({ snapshot: { ...idle, messages: [first] } });
+		const viewport = host.querySelector(".companion-chat-reply");
+		// jsdom has no layout; this verifies scroll ownership, not native geometry.
+		viewport.scrollTop = 70;
 		await render({
 			snapshot: {
 				...idle,
-				messages: [{ id: "a", role: "assistant", text: "A new answer" }],
+				messages: [{ ...first, text: "The same answer updated" }],
 			},
 		});
-		assert.equal(viewport.scrollTop, 100);
-		viewport.scrollTop = 500;
-		viewport.dispatchEvent(new dom.window.Event("scroll"));
-		height = 700;
+		assert.equal(viewport.scrollTop, 70);
+		await render({ open: false });
+		await render({ open: true });
+		assert.equal(viewport.scrollTop, 70);
 		await render({
 			snapshot: {
 				...idle,
-				messages: [{ id: "a", role: "assistant", text: "A longer answer" }],
+				messages: [
+					first,
+					{ id: "u", role: "user", text: "Do not show my earlier question" },
+					{ id: "b", role: "assistant", text: "The latest reply" },
+				],
 			},
 		});
-		assert.equal(viewport.scrollTop, height);
+		assert.equal(viewport.scrollTop, 0);
+		assert.equal(viewport.textContent, "The latest reply");
+		assert.equal(host.textContent.includes(first.text), false);
+		assert.equal(
+			host.textContent.includes("Do not show my earlier question"),
+			false,
+		);
+		assert.equal(viewport.tabIndex, 0);
 	});
 });
 
@@ -303,8 +310,8 @@ test("working disables replacement; attention is one neutral handoff; text stays
 		async ({ host, render, input, type }) => {
 			await render({ snapshot: { ...idle, sessionId: null } });
 			assert.equal(
-				host.querySelector('[aria-label="Open chat in the full app"]').disabled,
-				true,
+				host.querySelector('[aria-label="Open chat in the full app"]'),
+				null,
 			);
 			await render({
 				snapshot: { ...idle, status: "working", canSend: false },
@@ -338,7 +345,7 @@ test("working disables replacement; attention is one neutral handoff; text stays
 			assert.ok(host.textContent.includes("<script>not executable</script>"));
 			assert.equal(
 				host.querySelector("output").textContent,
-				"Needs your input in the full app.",
+				"Needs your input",
 			);
 			await act(async () => host.querySelector(".companion-chat-open").click());
 			assert.equal(expansions, 1);
@@ -349,6 +356,69 @@ test("working disables replacement; attention is one neutral handoff; text stays
 			onExpand: () => {
 				expansions += 1;
 			},
+		},
+	);
+});
+
+test("a new draft starts with one row and only Send and Collapse controls", async () => {
+	await fixture(
+		async ({ host, input }) => {
+			assert.equal(input().rows, 1);
+			assert.equal(
+				host.querySelector("header, h1, h2, .companion-chat-reply"),
+				null,
+			);
+			assert.deepEqual(
+				Array.from(host.querySelectorAll("button"), (button) =>
+					button.getAttribute("aria-label"),
+				),
+				["Send message", "Collapse chat"],
+			);
+			assert.equal(
+				host.textContent.includes("default Local Operator model"),
+				false,
+			);
+			assert.equal(host.querySelector(".companion-chat-status"), null);
+			assert.equal(host.querySelector(".companion-chat-count"), null);
+		},
+		{ snapshot: { ...idle, sessionId: null } },
+	);
+});
+
+test("Escape collapses the bubble but does not interrupt IME composition", async () => {
+	let collapsed = 0;
+	await fixture(
+		async ({ key }) => {
+			await act(async () => key({ key: "Escape", isComposing: true }));
+			assert.equal(collapsed, 0);
+			await act(async () => key({ key: "Escape" }));
+			assert.equal(collapsed, 1);
+		},
+		{
+			onCollapse: () => {
+				collapsed++;
+			},
+		},
+	);
+});
+
+test("an uncertain send retains the original text even if a synthetic input arrives while read-only", async () => {
+	let finish;
+	await fixture(
+		async ({ input, type, submit }) => {
+			await type("The exact original message");
+			await act(async () => submit());
+			assert.equal(input().readOnly, true);
+			await type("An input event during admission");
+			await act(async () => finish(false));
+			assert.equal(input().value, "The exact original message");
+			assert.equal(input().readOnly, false);
+		},
+		{
+			onSend: () =>
+				new Promise((resolve) => {
+					finish = resolve;
+				}),
 		},
 	);
 });

@@ -1,4 +1,5 @@
 import { cn } from "@shared/lib/utils";
+import type { CSSProperties } from "react";
 import type { CompanionMood } from "../../shared/desktop-companion";
 import hoodie from "./assets/companions/hoodie.png";
 import pixel from "./assets/companions/pixel.png";
@@ -6,6 +7,7 @@ import sprout from "./assets/companions/sprout.png";
 import "./companion-art.css";
 
 export type BuiltinCompanionCharacter = "sprout" | "hoodie" | "pixel";
+export type CompanionReaction = "rest" | "curious" | "pressed" | "dragging";
 
 const artwork: Record<BuiltinCompanionCharacter, string> = {
 	sprout,
@@ -17,9 +19,17 @@ interface CompanionArtProps {
 	character: BuiltinCompanionCharacter;
 	mood: CompanionMood;
 	engaged?: boolean;
+	gaze?: { x: number; y: number };
+	reaction?: CompanionReaction;
 }
 
-function Eyes({ mood, pixels }: { mood: CompanionMood; pixels: boolean }) {
+interface ExpressionProps {
+	mood: CompanionMood;
+	pixels: boolean;
+	reaction: CompanionReaction;
+}
+
+function Eyes({ mood, pixels, reaction }: ExpressionProps) {
 	if (mood === "offline") {
 		return (
 			<path
@@ -85,29 +95,41 @@ function Eyes({ mood, pixels }: { mood: CompanionMood; pixels: boolean }) {
 			</>
 		);
 	}
+	if (reaction === "pressed") {
+		return (
+			<path
+				d={
+					pixels
+						? "M18 32v-5h5v-4h8v4h5v5m28 0v-5h5v-4h8v4h5v5"
+						: "M18 32q9-12 18 0m28 0q9-12 18 0"
+				}
+			/>
+		);
+	}
+	const curious = reaction !== "rest";
 	return (
 		<>
 			<rect
 				className={cn("companion-art-eye-fill")}
-				x="19"
-				y="16"
-				width="16"
-				height="25"
+				x={curious ? 18 : 19}
+				y={curious ? 12 : 16}
+				width={curious ? 18 : 16}
+				height={curious ? 29 : 25}
 				rx={pixels ? 0 : 8}
 			/>
 			<rect
 				className={cn("companion-art-eye-fill")}
-				x="65"
-				y="16"
-				width="16"
-				height="25"
+				x={curious ? 64 : 65}
+				y={curious ? 12 : 16}
+				width={curious ? 18 : 16}
+				height={curious ? 29 : 25}
 				rx={pixels ? 0 : 8}
 			/>
 		</>
 	);
 }
 
-function Mouth({ mood, pixels }: { mood: CompanionMood; pixels: boolean }) {
+function Mouth({ mood, pixels, reaction }: ExpressionProps) {
 	if (mood === "working") {
 		return (
 			<g className={cn("companion-art-progress")}>
@@ -124,7 +146,31 @@ function Mouth({ mood, pixels }: { mood: CompanionMood; pixels: boolean }) {
 	if (mood === "error") {
 		return <path d={pixels ? "M40 58v-5h20v5" : "M40 58q10-10 20 0"} />;
 	}
+	if (mood === "idle") {
+		if (reaction === "pressed") {
+			return <path d={pixels ? "M42 50v5h16v-5" : "M40 49q10 10 20 0"} />;
+		}
+		if (reaction === "dragging") {
+			return (
+				<path
+					className={cn("companion-art-eye-fill")}
+					d={pixels ? "M37 49h26v6h-5v5H42v-5h-5z" : "M36 48q14 24 28 0Z"}
+				/>
+			);
+		}
+		if (reaction === "curious") {
+			return (
+				<path d={pixels ? "M34 47v8h7v5h18v-5h7v-8" : "M34 47q16 25 32 0"} />
+			);
+		}
+	}
 	return <path d={pixels ? "M38 49v7h6v4h12v-4h6v-7" : "M38 49q12 18 24 0"} />;
+}
+
+function gazeAxis(value: unknown): number {
+	return typeof value === "number" && Number.isFinite(value)
+		? Math.max(-1, Math.min(1, value))
+		: 0;
 }
 
 /** Decorative artwork only. The enclosing control owns its label and hit area. */
@@ -132,8 +178,18 @@ export function CompanionArt({
 	character,
 	mood,
 	engaged = false,
+	gaze,
+	reaction = engaged ? "curious" : "rest",
 }: CompanionArtProps) {
 	const pixels = character === "pixel";
+	const interacting = reaction !== "rest";
+	const x = interacting ? gazeAxis(gaze?.x) : 0;
+	const y = interacting ? gazeAxis(gaze?.y) : 0;
+	const tracking = {
+		"--companion-art-gaze-x": `${x * 7}px`,
+		"--companion-art-gaze-y": `${y * 4}px`,
+		"--companion-art-lean": `${x * 4}deg`,
+	} as CSSProperties;
 	return (
 		<span
 			aria-hidden="true"
@@ -143,31 +199,35 @@ export function CompanionArt({
 				engaged && "companion-art-engaged",
 			)}
 			data-mood={mood}
+			data-reaction={reaction}
+			style={tracking}
 		>
-			<span className={cn("companion-art-visual")}>
-				<img
-					className={cn("companion-art-body")}
-					src={artwork[character]}
-					alt=""
-					draggable={false}
-				/>
-				<svg
-					aria-hidden="true"
-					className={cn("companion-art-face")}
-					viewBox="0 0 100 70"
-					preserveAspectRatio="none"
-					focusable="false"
-					shapeRendering={pixels ? "crispEdges" : "geometricPrecision"}
-				>
-					<g className={cn("companion-art-gaze")}>
-						<g className={cn("companion-art-eyes")}>
-							<Eyes mood={mood} pixels={pixels} />
+			<span className={cn("companion-art-pose")}>
+				<span className={cn("companion-art-visual")}>
+					<img
+						className={cn("companion-art-body")}
+						src={artwork[character]}
+						alt=""
+						draggable={false}
+					/>
+					<svg
+						aria-hidden="true"
+						className={cn("companion-art-face")}
+						viewBox="0 0 100 70"
+						preserveAspectRatio="none"
+						focusable="false"
+						shapeRendering={pixels ? "crispEdges" : "geometricPrecision"}
+					>
+						<g className={cn("companion-art-gaze")}>
+							<g className={cn("companion-art-eyes")}>
+								<Eyes mood={mood} pixels={pixels} reaction={reaction} />
+							</g>
+							<g className={cn("companion-art-mouth")}>
+								<Mouth mood={mood} pixels={pixels} reaction={reaction} />
+							</g>
 						</g>
-						<g className={cn("companion-art-mouth")}>
-							<Mouth mood={mood} pixels={pixels} />
-						</g>
-					</g>
-				</svg>
+					</svg>
+				</span>
 			</span>
 		</span>
 	);

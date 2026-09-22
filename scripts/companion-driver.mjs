@@ -93,12 +93,12 @@ async function run() {
   window.webContents.on("console-message", details => { if (details.level === "error") errors.push(details.message); });
   const evaluate = script => window.webContents.executeJavaScript(script);
   await until(() => evaluate("!!document.querySelector('.companion-art')").catch(() => false), "pet mounts");
-  await until(() => evaluate("document.querySelector('output')?.textContent === 'Ready'"), "catalogue status reaches renderer");
+  await until(() => evaluate("document.querySelector('.companion-character')?.getAttribute('aria-label').includes('Ready')"), "catalogue status reaches renderer");
   assert.equal(window.isVisible(), false);
   assert.equal(window.isFocused(), false);
   assert.equal(await evaluate("typeof window.electron"), "undefined", "pet has no general app IPC bridge");
   assert.equal(await evaluate("typeof window.require"), "undefined");
-  assert.equal(await evaluate("document.documentElement.scrollWidth"), 216);
+  assert.equal(await evaluate("document.documentElement.scrollWidth"), 132);
 
   // A second renderer with the same preload cannot invoke this pet's capabilities.
   const outsider = new BrowserWindow({ show: false, focusable: false, webPreferences: { preload, sandbox: true, contextIsolation: true } });
@@ -131,29 +131,52 @@ async function run() {
   writeFileSync(join(out, "pixel-light.png"), (await window.webContents.capturePage()).toPNG());
   outsider.destroy();
 
+  catalogue = { result: { sessions: [] } };
+  companion.refresh();
+  await until(() => evaluate("document.querySelector('main')?.dataset.mood === 'idle'"), "hover idle");
+  const hoverAt = (x, y) => evaluate("(() => { const pet = document.querySelector('.companion-character'); const b = pet.getBoundingClientRect(); pet.dispatchEvent(new PointerEvent('pointerover', {bubbles:true, pointerType:'mouse', clientX:b.left+b.width*" + x + ", clientY:b.top+b.height*" + y + "})); pet.dispatchEvent(new PointerEvent('pointermove', {bubbles:true, pointerType:'mouse', clientX:b.left+b.width*" + x + ", clientY:b.top+b.height*" + y + "})); })()");
+  await hoverAt(.1, .3);
+  await until(() => evaluate("document.querySelector('.companion-character').dataset.reaction === 'curious'"), "hover reaction");
+  await pause(250);
+  const leftGaze = await evaluate("getComputedStyle(document.querySelector('.companion-art-gaze')).transform");
+  writeFileSync(join(out, "hover-left.png"), (await window.webContents.capturePage()).toPNG());
+  await hoverAt(.9, .7);
+  await pause(250);
+  const rightGaze = await evaluate("getComputedStyle(document.querySelector('.companion-art-gaze')).transform");
+  assert.notEqual(leftGaze, rightGaze, "eyes follow the pointer across the pet");
+  writeFileSync(join(out, "hover-right.png"), (await window.webContents.capturePage()).toPNG());
   window.webContents.debugger.attach("1.3");
   await window.webContents.debugger.sendCommand("Emulation.setEmulatedMedia", { features: [{ name: "prefers-reduced-motion", value: "reduce" }] });
   assert.deepEqual(await evaluate("Array.from(document.querySelectorAll('.companion-art *')).filter(e=>getComputedStyle(e).animationName!=='none').map(e=>e.className.baseVal||e.className)"), [], "reduced motion has no animation loops");
+  assert.equal(await evaluate("getComputedStyle(document.querySelector('.companion-art-gaze')).transform"), "none", "reduced motion prevents gaze tracking");
+  assert.equal(await evaluate("getComputedStyle(document.querySelector('.companion-art-pose')).transform"), "none");
   window.webContents.debugger.detach();
+  await evaluate("document.querySelector('.companion-character').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,button:2}))");
+  await pause();
+  assert.equal(await evaluate("document.querySelector('.companion-chat').hidden"), true, "right-click does not open chat");
+  assert.equal(window.isVisible(), false, "right-click cannot present a native menu in headless mode");
 
   catalogue = { result: { sessions: [{ id: "fixture-chat", status: { code: "approval" } }] } };
   companion.refresh();
   await until(() => evaluate("document.querySelector('main')?.dataset.mood === 'attention'"), "click target current");
-  await evaluate("document.querySelector('.companion-status').click()");
+  await evaluate("window.companion.openTask()");
   await until(() => opened.length === 1, "click opens chat");
   assert.equal(opened[0], "fixture-chat");
   const collapsedBounds = window.getBounds();
   await evaluate("document.querySelector('.companion-character').click()");
   await until(() => evaluate("!document.querySelector('.companion-chat').hidden"), "inline chat opens");
   assert.equal(opened.length, 1, "pet click keeps conversation beside pet");
-  assert.equal(window.getBounds().width, 380);
+  assert.equal(window.getBounds().width, 316);
   assert.equal(window.isVisible(), false, "opening chat cannot present a headless window");
   assert.equal(window.isFocused(), false);
+  await until(() => window.getBounds().height < 240, "composer-only popup fits its content");
+  assert.equal(await evaluate("document.querySelector('.companion-bubble')"), null);
+  assert.equal(await evaluate("document.querySelector('.companion-chat-header')"), null);
   assert.equal(await evaluate("document.documentElement.scrollWidth > window.innerWidth"), false);
   const typeDraft = text => evaluate("Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(document.querySelector('textarea'), " + JSON.stringify(text) + "); document.querySelector('textarea').dispatchEvent(new Event('input', {bubbles:true}))");
   await typeDraft("Could you help me plan a quiet afternoon?");
   await evaluate("document.querySelector('[aria-label=\"Collapse chat\"]').click()");
-  await until(() => window.getBounds().width === 216, "collapse window");
+  await until(() => window.getBounds().width === 132, "collapse window");
   assert.deepEqual(window.getBounds(), collapsedBounds, "collapse restores exact anchor");
   await until(() => evaluate("document.activeElement?.classList.contains('companion-character')"), "collapse returns keyboard focus to pet");
   await evaluate("document.querySelector('.companion-character').click()");
@@ -169,7 +192,7 @@ async function run() {
   streaming = false;
   catalogue = { result: { sessions: [{ id: chatId, status: { code: "complete" }, attention: { unseen: true } }] } };
   companion.refresh();
-  await until(() => evaluate("document.querySelector('.companion-chat-transcript').textContent.includes('Take a short walk')"), "durable reply appears");
+  await until(() => evaluate("document.querySelector('.companion-chat-reply')?.textContent.includes('Take a short walk')"), "durable reply appears");
   await pause(250);
   writeFileSync(join(out, "chat-reply-light.png"), (await window.webContents.capturePage()).toPNG());
   await evaluate("localStorage.setItem('ui-preferences-storage', JSON.stringify({state:{themeName:'localOperatorDark'}})); window.dispatchEvent(new StorageEvent('storage'))");
@@ -195,7 +218,7 @@ async function run() {
   assert.equal(await evaluate("document.querySelector('textarea').value"), "A second thought");
   writeFileSync(join(out, "chat-unconfirmed.png"), (await window.webContents.capturePage()).toPNG());
   await evaluate("document.querySelector('[aria-label=\"Collapse chat\"]').click()");
-  await until(() => window.getBounds().width === 216, "collapse before move");
+  await until(() => window.getBounds().width === 132, "collapse before move");
   const position = window.getPosition();
   await evaluate("window.companion.nudge('ArrowLeft')");
   await until(() => window.getPosition()[0] !== position[0], "keyboard move");
@@ -212,7 +235,7 @@ async function run() {
   await until(() => evaluate("document.querySelector('.companion-custom-art')?.complete === true"), "custom PNG loads and falls back to idle pose");
   assert.match(companion.appearance.id, /^custom-/);
   const selected = companion.appearance.id;
-  await evaluate("document.querySelector('.companion-hide').click()");
+  await evaluate("window.companion.hide()");
   await until(() => !companion.enabled, "hide control");
   assert.equal(pet(), window);
   assert.equal(window.isVisible(), false);
@@ -240,7 +263,7 @@ async function run() {
     app.once("will-quit", () => {
       assert.equal(JSON.parse(readFileSync(prefs, "utf8")).enabled, true, "ordinary Quit preserves companion visibility for next launch");
       assert.equal(BrowserWindow.getAllWindows().length, 0);
-      writeFileSync(join(out, "verification.json"), JSON.stringify({ passed: true, electron: process.versions.electron, captures: 24, checks: ["sandboxed renderer", "foreign sender rejection", "isolated zoom", "six real catalogue states", "three characters", "theme sync", "reduced motion", "task click", "inline chat and real IPC", "draft survives collapse", "admitted send and durable reply", "ambiguous send preserves draft", "approval handoff", "expand exact conversation", "keyboard move and position persistence", "custom PNG import and fallback", "hide stops polling", "native close", "actual Electron quit preserves next-launch visibility"] }, null, 2));
+      writeFileSync(join(out, "verification.json"), JSON.stringify({ passed: true, electron: process.versions.electron, captures: 26, checks: ["sandboxed renderer", "foreign sender rejection", "isolated zoom", "six real catalogue states", "three characters", "theme sync", "reduced motion", "task context action", "hover follows pointer", "headless right-click remains hidden", "compact intrinsic chat sizing", "inline chat and real IPC", "draft survives collapse", "admitted send and durable reply", "ambiguous send preserves draft", "approval handoff", "expand exact conversation", "keyboard move and position persistence", "custom PNG import and fallback", "hide stops polling", "native close", "actual Electron quit preserves next-launch visibility"] }, null, 2));
       console.log("COMPANION_DRIVER_OK");
       resolveQuit();
     });

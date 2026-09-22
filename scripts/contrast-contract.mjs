@@ -353,21 +353,7 @@ const CONTROLS = [
 		ink: "onAccent",
 	})),
 	// Borderless toolbar icons and message text use the INKS x ground floors;
-	// their hover grounds and user-message wash are not control boundaries.
-	{
-		name: "companion speech bubble and hide control",
-		on: GROUNDS,
-		fill: "surface",
-		border: "borderControl",
-		ink: "ink",
-	},
-	{
-		name: "companion status mark",
-		on: ["surface"],
-		fill: "accent",
-		border: "accent",
-		ink: "onAccent",
-	},
+	// their hover grounds are not control boundaries.
 	{
 		name: "primary button",
 		on: GROUNDS,

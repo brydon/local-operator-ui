@@ -12,13 +12,35 @@
 	user-select: none;
 }
 
+.companion-art-pose,
 .companion-art-visual {
 	display: block;
 	position: relative;
 	width: 100%;
 	height: 100%;
 	transform-origin: 50% 90%;
+}
+
+.companion-art-pose {
+	transition: transform 120ms ease;
+}
+
+.companion-art-visual {
 	animation: companion-art-breathe 4s ease-in-out infinite;
+}
+
+.companion-art[data-reaction="pressed"] .companion-art-pose {
+	transform: translateY(2px) scale(1.025, 0.975);
+}
+
+.companion-art[data-reaction="dragging"] .companion-art-pose {
+	transform: rotate(var(--companion-art-lean)) scale(0.985, 1.015);
+}
+
+.companion-art[data-reaction="pressed"] .companion-art-visual,
+.companion-art[data-reaction="dragging"] .companion-art-visual,
+.companion-art[data-mood][data-reaction="dragging"] .companion-art-eyes {
+	animation: none;
 }
 
 .companion-art-body {
@@ -72,11 +94,11 @@
 
 .companion-art-gaze {
 	transform-origin: 50% 40%;
+	transform: translate(
+		var(--companion-art-gaze-x, 0px),
+		var(--companion-art-gaze-y, 0px)
+	);
 	transition: transform 120ms ease, color 120ms ease;
-}
-
-.companion-art-engaged .companion-art-gaze {
-	transform: translateY(-2px);
 }
 
 .companion-art-eyes {
@@ -148,10 +170,13 @@
 
 @media (prefers-reduced-motion: reduce) {
 	.companion-art-visual,
+	.companion-art-pose,
+	.companion-art[data-reaction] .companion-art-pose,
 	.companion-art[data-mood] .companion-art-visual,
 	.companion-art[data-mood] .companion-art-eyes,
 	.companion-art-progress rect {
 		animation: none;
+		transition: none;
 		transform: none;
 		opacity: 1;
 	}

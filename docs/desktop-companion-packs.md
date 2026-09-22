@@ -5,16 +5,18 @@ expressions, from **View > Companion character > Add character…**.
 The desktop companion also offers three built-in characters: Sprout, Hoodie
 and Pixel. Displaying and customizing a character needs no plugin, API key or model request.
 
-Click the character to chat beside it. Enter sends; Shift+Enter adds a line.
+Click the character for a small input bubble. Enter sends; Shift+Enter adds a
+line. Right-click (or press Shift+F10 while the pet is focused) for Hide,
+character choices, and Open task in app.
 Collapse the card (or press Escape inside it) to return to the small pet; your
 unsent draft and conversation remain there when you reopen it. The arrow in the
-chat header opens that conversation in the full app. The status bubble opens
-the task it reports, without changing the companion's own conversation.
+input bubble opens that conversation in the full app. Open task in app in
+the context menu opens the task the pet is reporting without changing the
+companion’s own conversation.
 
 A new companion conversation uses Local Operator's configured default model
 and your home directory as its starting folder. Sending a message uses your
-normal provider and credentials. The panel shows recent user messages and
-completed assistant prose; tool details, long history, attachments, model
+normal provider and credentials. The bubble shows only the latest completed assistant reply; tool details, long history, attachments, model
 selection and approval/question controls remain in the full app. A pending
 approval or question offers **Open app** and prevents further inline sends.
 
@@ -25,8 +27,7 @@ Drafts are kept while the card is collapsed, and hiding the companion. They are 
 or closing its native window.
 
 For the quickest start, select a transparent PNG of your character. Its filename
-becomes its name, and it uses that image for every task state while the status
-label continues to update. The app copies the image, so the original can be
+becomes its name, and it uses that image for every task state while its tooltip and accessible task label continue to update. The app copies the image, so the original can be
 moved afterward. A JSON pack lets you supply a different image for each state.
 
 Create a folder with `companion.json` and at least `idle.png`:
@@ -64,7 +65,9 @@ hard edges of pixel art when it is resized.
 | `offline` | The backend is connecting or its status is unavailable. |
 
 These poses reflect the app's task status. Imported poses are still images;
-the pack cannot run an animation script or inspect conversations. Custom images remain static, including when reduced motion is enabled.
+the pack cannot run an animation script or inspect conversations. Custom images have a small press and drag reaction on the image itself. They
+do not gain eye tracking; built-in characters draw their eyes separately.
+Reduced motion keeps imported images static.
 
 Choose **View > Companion character > Add character…**, then select
 your PNG or `companion.json`. The app copies the validated image data into its user-data

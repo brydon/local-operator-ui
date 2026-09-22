@@ -29,9 +29,14 @@ are decorative; the companion control provides the accessible state and action.
 | Check chat | Concerned eyebrows and a frown |
 | Connecting / Status unavailable | Resting eyes |
 
-Pointer or keyboard engagement moves the eyes slightly upward. It never changes
-the reported task state. The renderer uses only the app's authoritative mood;
-there are no invented reading, typing, or thinking states.
+Hover and keyboard focus perk up an idle face. Eyes follow the pointer while
+it is over the character, with a bounded gaze. Pressing gives an idle pet a
+brief happy expression and a small squash; dragging adds a slight lean. The
+pointer is observed only inside the character, with updates coalesced once per
+animation frame. Pointer cancellation, leaving, window blur and hiding settle
+the relevant reactions. Keyboard focus remains engaged if the mouse leaves.
+Working, attention, error and offline expressions retain their task meaning.
+These local interaction reactions make no model requests.
 
 ## Scoped illustration exception
 
@@ -44,9 +49,12 @@ also communicated by the adjacent readable status label.
 The requested living desktop character is a scoped exception to the standard
 240ms UI animation duration. Its artwork may breathe by two pixels over four
 seconds, blink occasionally, and animate the working dots. The enclosing
-button, focus outline, and hit area never move. The eyes' engagement response
-takes 120ms. `prefers-reduced-motion: reduce` removes the loops and gaze motion
-entirely, leaving all six expressions visible and static. These exceptions apply
+button, focus outline, and hit area never move. Pointer gaze and artwork pose transitions take 120ms. A press moves the
+illustration down by two pixels and squashes it by 2.5%; dragging leans it by at
+most four degrees. Imported PNGs have a similarly small press/drag transform.
+The button and its hit area stay fixed. These interaction responses are part
+of the scoped character illustration exception to the no-hover-motion rule. `prefers-reduced-motion: reduce` removes the loops, gaze tracking and body transforms
+entirely. Static facial reactions still communicate pointer/keyboard engagement. These exceptions apply
 only to `.companion-art` and its descendants.
 
 ## Generation prompts

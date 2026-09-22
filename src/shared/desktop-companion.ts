@@ -116,8 +116,8 @@ export function companionPreferences(value: unknown): CompanionPreferences {
 	};
 }
 
-export const COMPANION_SIZE = { width: 216, height: 220 };
-export const COMPANION_CHAT_SIZE = { width: 380, height: 600 };
+export const COMPANION_SIZE = { width: 132, height: 136 };
+export const COMPANION_CHAT_SIZE = { width: 316, height: 194 };
 
 export function clampCompanionPosition(
 	point: { x: number; y: number },
@@ -153,6 +153,8 @@ export interface CompanionBridge {
 	collapseChat(): void;
 	expandChat(): void;
 	openTask(): void;
+	showMenu(): void;
+	resizeChat(height: number): void;
 	getState(): Promise<CompanionState>;
 	onState(listener: (state: CompanionState) => void): () => void;
 	getAppearance(): Promise<CompanionAppearance>;

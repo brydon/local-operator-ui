@@ -1,5 +1,5 @@
 import { readFileSync, renameSync, writeFileSync } from "node:fs";
-import { BrowserWindow, ipcMain, screen } from "electron";
+import { BrowserWindow, Menu, ipcMain, screen } from "electron";
 import type { IpcMainEvent, IpcMainInvokeEvent } from "electron";
 import { BUILTIN_COMPANIONS } from "../shared/companion-skin";
 import type { CompanionAppearance } from "../shared/companion-skin";
@@ -39,6 +39,7 @@ export class DesktopCompanion {
 	private window: BrowserWindow | null = null;
 	private chat: CompanionChatService;
 	private chatOpen = false;
+	private chatHeight = COMPANION_CHAT_SIZE.height;
 	private preferences: CompanionPreferences;
 	private skins: CompanionSkinLibrary;
 	private state: CompanionState = COMPANION_OFFLINE;
@@ -215,7 +216,9 @@ export class DesktopCompanion {
 			});
 		});
 		window.on("blur", () => {
+			const dragging = this.dragOrigin !== null;
 			this.dragOrigin = null;
+			if (dragging && this.chatOpen) this.layoutChat(true);
 		});
 		window.on("closed", () => {
 			if (this.window === window) {
@@ -290,7 +293,9 @@ export class DesktopCompanion {
 		if (!this.window) return;
 		const bounds = this.window.getBounds();
 		const area = screen.getDisplayMatching(bounds).workArea;
-		const target = open ? COMPANION_CHAT_SIZE : COMPANION_SIZE;
+		const target = open
+			? { width: COMPANION_CHAT_SIZE.width, height: this.chatHeight }
+			: COMPANION_SIZE;
 		const size = {
 			width: Math.min(target.width, area.width),
 			height: Math.min(target.height, area.height),
@@ -337,10 +342,50 @@ export class DesktopCompanion {
 		this.layoutChat(this.chatOpen);
 	}
 
+	private showMenu(): void {
+		const dragging = this.dragOrigin !== null;
+		this.dragOrigin = null;
+		if (dragging && this.chatOpen) this.layoutChat(true);
+		if (!this.window || this.options.headless) return;
+		Menu.buildFromTemplate([
+			{ label: "Chat", click: () => this.showChat() },
+			{
+				label: "Open task in app",
+				enabled: !!this.state.sessionId,
+				click: () => this.options.openChat(this.state.sessionId),
+			},
+			{
+				label: "Character",
+				submenu: this.characters.map((character) => ({
+					label: character.name,
+					type: "radio" as const,
+					checked: character.id === this.appearance.id,
+					click: () => this.selectCharacter(character.id),
+				})),
+			},
+			{ type: "separator" },
+			{ label: "Hide companion", click: () => this.setEnabled(false) },
+		]).popup({ window: this.window });
+	}
+
 	private onAction(event: IpcMainEvent, action: unknown, value: unknown): void {
 		if (!this.trusted(event) || !this.window) return;
 		if (action === "hide") this.setEnabled(false);
-		else if (action === "open") this.showChat();
+		else if (action === "menu") this.showMenu();
+		else if (
+			action === "chat-size" &&
+			this.chatOpen &&
+			typeof value === "number" &&
+			Number.isFinite(value)
+		) {
+			const height = Math.max(
+				COMPANION_CHAT_SIZE.height,
+				Math.min(360, Math.ceil(value)),
+			);
+			if (height === this.chatHeight) return;
+			this.chatHeight = height;
+			if (!this.dragOrigin) this.layoutChat(true);
+		} else if (action === "open") this.showChat();
 		else if (action === "open-task")
 			this.options.openChat(this.state.sessionId);
 		else if (action === "collapse-chat") this.layoutChat(false);
@@ -378,11 +423,13 @@ export class DesktopCompanion {
 						y: this.dragOrigin.position.y + dy,
 					});
 			} else if (value === "end" || value === "cancel") {
+				const dragging = this.dragOrigin !== null;
 				const clicked =
 					value === "end" && this.dragOrigin && !this.dragOrigin.moved;
 				this.dragOrigin = null;
 				this.save();
 				if (clicked) this.showChat();
+				else if (dragging && this.chatOpen) this.layoutChat(true);
 			}
 		} else if (action === "nudge" && typeof value === "string") {
 			const offsets: Record<string, [number, number]> = {

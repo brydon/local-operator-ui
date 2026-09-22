@@ -48,8 +48,9 @@ The Local Operator UI is a user interface for managing and interacting with the 
 ## Desktop companion
 
 A small floating character shows when Local Operator is working, needs your
-attention, or has finished. Click the character to chat in a compact panel,
-drag it to move, or use the arrow keys while it is focused. Collapse the panel
+attention, or has finished. It looks toward your pointer and reacts to hover,
+press, and dragging. Click it for a small input bubble, right-click for Hide
+and character choices, or use the arrow keys while it is focused. Collapse the panel
 or hide the pet without losing your draft. Expand a conversation into the full
 app for approvals, files, model selection, or a larger workspace. Its position
 and visibility are remembered. Observing task status makes no model calls;

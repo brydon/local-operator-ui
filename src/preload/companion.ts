@@ -7,6 +7,9 @@ import type {
 } from "../shared/desktop-companion";
 
 const companion: CompanionBridge = {
+	showMenu: () => ipcRenderer.send("companion:action", "menu"),
+	resizeChat: (height) =>
+		ipcRenderer.send("companion:action", "chat-size", height),
 	getChat: () => ipcRenderer.invoke("companion:get-chat"),
 	onChat: (listener) => {
 		const receive = (

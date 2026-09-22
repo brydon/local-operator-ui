@@ -34,6 +34,18 @@ function fixture(t, { headless = true } = {}) {
 	const intervals = new Map();
 	let timerId = 0;
 	const windows = [];
+	const menus = [];
+	const Menu = {
+		buildFromTemplate: (template) => {
+			const menu = { template, popupOptions: null };
+			menus.push(menu);
+			return {
+				popup: (options) => {
+					menu.popupOptions = options;
+				},
+			};
+		},
+	};
 	let cursor = { x: 400, y: 400 };
 	let workArea = { x: 0, y: 0, width: 1920, height: 1080 };
 	const screen = new EventEmitter();
@@ -51,6 +63,7 @@ function fixture(t, { headless = true } = {}) {
 			this.hidden = true;
 			this.presentations = [];
 			this.messages = [];
+			this.boundsChanges = 0;
 			this.webContents = new EventEmitter();
 			this.webContents.mainFrame = { url: "" };
 			this.webContents.send = (...message) => this.messages.push(message);
@@ -89,6 +102,7 @@ function fixture(t, { headless = true } = {}) {
 			return { x: this.position[0], y: this.position[1], ...this.size };
 		}
 		setBounds({ x, y, width, height }) {
+			this.boundsChanges++;
 			assert.ok([x, y, width, height].every(Number.isFinite));
 			this.setPosition(x, y);
 			this.size = { width, height };
@@ -116,7 +130,7 @@ function fixture(t, { headless = true } = {}) {
 		exports: module.exports,
 		require: (name) =>
 			name === "electron"
-				? { ipcMain, BrowserWindow: FakeWindow, screen }
+				? { ipcMain, BrowserWindow: FakeWindow, screen, Menu }
 				: require(name),
 		process,
 		console,
@@ -205,6 +219,7 @@ function fixture(t, { headless = true } = {}) {
 	return {
 		companion,
 		windows,
+		menus,
 		handlers,
 		ipcMain,
 		screen,
@@ -260,6 +275,8 @@ test("headless companion never presents or changes desktop workspaces", (t) => {
 	assert.equal(window.options.webPreferences.zoomFactor, 1);
 	assert.deepEqual(window.presentations, []);
 	assert.equal(window.workspaces, undefined);
+	f.action("menu");
+	assert.deepEqual(f.menus, []);
 	f.action("open");
 	assert.equal(f.chat().open, true);
 	assert.deepEqual(window.presentations, []);
@@ -423,7 +440,7 @@ test("inline chat preserves its lower-right anchor through collapse and dragging
 	const before = window.getBounds();
 	f.action("open");
 	const expanded = window.getBounds();
-	assert.deepEqual(window.size, { width: 380, height: 600 });
+	assert.deepEqual(window.size, { width: 316, height: 194 });
 	assert.equal(expanded.x + expanded.width, before.x + before.width);
 	assert.equal(expanded.y + expanded.height, before.y + before.height);
 	assert.deepEqual(f.preferences().position, { x: before.x, y: before.y });
@@ -457,21 +474,159 @@ test("chat layout stays within a changed display work area", (t) => {
 	const f = fixture(t);
 	const window = f.windows[0];
 	f.action("open");
-	f.workArea({ x: -320, y: -80, width: 320, height: 420 });
+	f.action("chat-size", 360);
+	f.workArea({ x: -260, y: -80, width: 260, height: 240 });
 	f.screen.emit("display-metrics-changed");
 	assert.deepEqual(window.getBounds(), {
-		x: -320,
+		x: -260,
 		y: -80,
-		width: 320,
-		height: 420,
+		width: 260,
+		height: 240,
 	});
 	f.action("collapse-chat");
 	assert.deepEqual(window.getBounds(), {
-		x: -216,
-		y: 120,
-		width: 216,
-		height: 220,
+		x: -132,
+		y: 24,
+		width: 132,
+		height: 136,
 	});
+});
+
+test("intrinsic chat height accepts only trusted finite values and preserves its anchor", (t) => {
+	const f = fixture(t);
+	const window = f.windows[0];
+	assert.deepEqual(window.size, { width: 132, height: 136 });
+	f.action("chat-size", 360);
+	assert.equal(window.boundsChanges, 0);
+	f.action("open");
+	const before = window.getBounds();
+	const count = window.boundsChanges;
+	for (const value of [
+		null,
+		undefined,
+		{},
+		[],
+		"360",
+		Number.NaN,
+		Number.POSITIVE_INFINITY,
+		Number.NEGATIVE_INFINITY,
+	])
+		f.action("chat-size", value);
+	f.action("chat-size", 300, {
+		sender: {},
+		senderFrame: window.webContents.mainFrame,
+	});
+	f.action("chat-size", 194);
+	assert.equal(window.boundsChanges, count);
+	f.action("chat-size", 250.2);
+	assert.equal(window.size.height, 251);
+	assert.equal(window.boundsChanges, count + 1);
+	assert.equal(
+		window.position[1] + window.size.height,
+		before.y + before.height,
+	);
+	f.action("chat-size", 250.9);
+	assert.equal(window.boundsChanges, count + 1);
+	f.action("chat-size", Number.MAX_VALUE);
+	assert.equal(window.size.height, 360);
+	f.action("chat-size", -100);
+	assert.equal(window.size.height, 194);
+	f.action("collapse-chat");
+	const collapsed = window.getBounds();
+	f.action("chat-size", 360);
+	assert.deepEqual(window.getBounds(), collapsed);
+	assert.deepEqual(window.presentations, []);
+});
+
+test("reply resizing waits for dragging to finish, cancel, blur or open a menu", (t) => {
+	for (const finish of ["end", "cancel", "blur", "menu"]) {
+		const f = fixture(t);
+		const window = f.windows[0];
+		f.action("open");
+		const before = window.getBounds();
+		const changes = window.boundsChanges;
+		f.cursor({ x: 400, y: 400 });
+		f.action("drag", "start");
+		f.action("chat-size", 300);
+		f.action("chat-size", 320);
+		assert.deepEqual(window.getBounds(), before, finish);
+		assert.equal(window.boundsChanges, changes, finish);
+		f.cursor({ x: 360, y: 350 });
+		f.action("drag", "move");
+		assert.deepEqual(
+			window.getBounds(),
+			{
+				...before,
+				x: before.x - 40,
+				y: before.y - 50,
+			},
+			finish,
+		);
+		if (finish === "blur") window.emit("blur");
+		else if (finish === "menu") f.action("menu");
+		else f.action("drag", finish);
+		const after = window.getBounds();
+		assert.equal(after.height, 320, finish);
+		assert.equal(after.x, before.x - 40, finish);
+		assert.equal(after.y + after.height, before.y + before.height - 50, finish);
+		assert.equal(window.boundsChanges, changes + 1, finish);
+		f.cursor({ x: 300, y: 300 });
+		f.action("drag", "move");
+		f.action("drag", "end");
+		assert.deepEqual(window.getBounds(), after, finish);
+		assert.equal(window.boundsChanges, changes + 1, finish);
+		assert.deepEqual(window.presentations, [], finish);
+	}
+});
+
+test("native menu stays scoped, cancels drag, and exposes character and hide controls", async (t) => {
+	const f = fixture(t, { headless: false });
+	const window = f.windows[0];
+	window.emit("ready-to-show");
+	f.action("menu", undefined, {
+		sender: {},
+		senderFrame: window.webContents.mainFrame,
+	});
+	assert.equal(f.menus.length, 0);
+	f.action("drag", "start");
+	f.action("menu");
+	f.action("drag", "end");
+	assert.equal(f.chat().open, false);
+	assert.deepEqual(window.presentations, ["inactive"]);
+	const menu = f.menus[0];
+	assert.equal(menu.popupOptions.window, window);
+	assert.equal(
+		menu.template.find((item) => item.label === "Open task in app").enabled,
+		false,
+	);
+	const characters = menu.template.find(
+		(item) => item.label === "Character",
+	).submenu;
+	assert.equal(characters.length, 3);
+	assert.equal(characters.filter((item) => item.checked).length, 1);
+	characters.find((item) => item.label === "Pixel").click();
+	assert.equal(f.preferences().character, "pixel");
+	assert.equal(f.companion.appearance.id, "pixel");
+	await f.flush();
+	f.requests.shift().resolve(catalogue("busy", "222222222222"));
+	await settle();
+	f.action("menu");
+	const refreshed = f.menus.at(-1);
+	const openTask = refreshed.template.find(
+		(item) => item.label === "Open task in app",
+	);
+	assert.equal(openTask.enabled, true);
+	openTask.click();
+	assert.deepEqual(f.opened, ["222222222222"]);
+	refreshed.template.find((item) => item.label === "Chat").click();
+	assert.equal(f.chat().open, true);
+	refreshed.template.find((item) => item.label === "Hide companion").click();
+	assert.equal(f.companion.enabled, false);
+	assert.equal(window.hidden, true);
+	assert.equal(window.destroyed, false);
+	const menusBeforeHide = f.menus.length;
+	f.action("menu");
+	assert.equal(f.menus.length, menusBeforeHide);
 });
 
 test("hiding retains the renderer but stops polling, rejects IPC and defeats a late ready event", async (t) => {

@@ -15,6 +15,7 @@ import "./companion.css";
 import type { CompanionAppearance } from "../../shared/companion-skin";
 import { CompanionArt } from "./companion-art";
 import { CompanionChat } from "./companion-chat";
+import { useCompanionInteraction } from "./companion-interaction";
 
 declare global {
 	interface Window {
@@ -43,7 +44,7 @@ function Companion() {
 		id: "sprout",
 		name: "Sprout",
 	});
-	const [engaged, setEngaged] = useState(false);
+	const interaction = useCompanionInteraction();
 	const [chat, setChat] = useState<CompanionChatView>({
 		open: false,
 		snapshot: {
@@ -108,72 +109,86 @@ function Companion() {
 		};
 	}, []);
 
+	useEffect(() => {
+		if (!chat.open) return;
+		const root = document.querySelector<HTMLElement>(".companion");
+		const card = document.querySelector<HTMLElement>(".companion-chat");
+		const pet = document.querySelector<HTMLElement>(".companion-character");
+		if (!root || !card || !pet) return;
+		const measure = () => {
+			const styles = getComputedStyle(root);
+			window.companion.resizeChat(
+				Math.ceil(
+					card.getBoundingClientRect().height +
+						pet.getBoundingClientRect().height +
+						Number.parseFloat(styles.paddingTop) +
+						Number.parseFloat(styles.paddingBottom) +
+						Number.parseFloat(styles.rowGap),
+				),
+			);
+		};
+		const observer = new ResizeObserver(measure);
+		observer.observe(card);
+		observer.observe(pet);
+		measure();
+		return () => observer.disconnect();
+	}, [chat.open]);
+
 	return (
 		<main
 			className={cn("companion", chat.open && "companion--chat")}
 			data-mood={state.mood}
 		>
-			<div className={cn("companion-bubble")}>
-				<button
-					type="button"
-					className={cn("companion-status")}
-					onClick={() =>
-						state.sessionId
-							? window.companion.openTask()
-							: window.companion.openChat()
-					}
-					aria-label={`${state.label}. ${state.sessionId ? "Open task in Local Operator" : "Chat with companion"}`}
-				>
-					<span className={cn("companion-status-mark")} aria-hidden="true">
-						{state.mood === "complete"
-							? "✓"
-							: state.mood === "attention" || state.mood === "error"
-								? "!"
-								: "·"}
-					</span>
-					<output aria-live="polite">{state.label}</output>
-				</button>
-				<button
-					type="button"
-					className={cn("companion-hide")}
-					onClick={() => window.companion.hide()}
-					aria-label="Hide companion. Show again from the View menu."
-					title="Hide companion"
-				>
-					<svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
-						<path d="m4 4 8 8M12 4l-8 8" />
-					</svg>
-				</button>
-			</div>
 			<button
 				type="button"
 				className={cn("companion-character")}
-				onPointerEnter={() => setEngaged(true)}
-				onPointerLeave={() => setEngaged(false)}
-				onFocus={() => setEngaged(true)}
-				onBlur={() => setEngaged(false)}
-				aria-label="Open Local Operator chat. Drag to move, or use arrow keys."
-				title="Click to chat · Drag to move"
+				{...interaction.handlers}
+				data-reaction={interaction.reaction}
+				aria-label={`${appearance.name}. ${state.label}. Click to chat. Drag or use arrow keys to move. Right-click for options.`}
+				title={`${state.label} · Click to chat · Right-click for options`}
+				onContextMenu={(event) => {
+					event.preventDefault();
+					interaction.reset();
+					window.companion.showMenu();
+				}}
 				onPointerDown={(event) => {
-					if (event.button !== 0) return;
+					if (event.button !== 0 || event.ctrlKey || event.isPrimary === false)
+						return;
+					interaction.handlers.onPointerDown(event);
 					event.currentTarget.setPointerCapture(event.pointerId);
 					window.companion.drag("start");
 				}}
 				onPointerMove={(event) => {
+					interaction.handlers.onPointerMove(event);
 					if (event.currentTarget.hasPointerCapture(event.pointerId))
 						window.companion.drag("move");
 				}}
 				onPointerUp={(event) => {
+					interaction.handlers.onPointerUp();
 					if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
 					window.companion.drag("end");
 					event.currentTarget.releasePointerCapture(event.pointerId);
 				}}
-				onPointerCancel={() => window.companion.drag("cancel")}
-				onLostPointerCapture={() => window.companion.drag("cancel")}
+				onPointerCancel={() => {
+					interaction.handlers.onPointerCancel();
+					window.companion.drag("cancel");
+				}}
+				onLostPointerCapture={() => {
+					interaction.handlers.onLostPointerCapture();
+					window.companion.drag("cancel");
+				}}
 				onClick={(event) => {
 					if (event.detail === 0) window.companion.openChat();
 				}}
 				onKeyDown={(event) => {
+					if (
+						event.key === "ContextMenu" ||
+						(event.shiftKey && event.key === "F10")
+					) {
+						event.preventDefault();
+						interaction.reset();
+						window.companion.showMenu();
+					}
 					if (event.key === "Escape") {
 						if (chat.open) window.companion.collapseChat();
 						else window.companion.hide();
@@ -207,13 +222,12 @@ function Companion() {
 								: "sprout"
 						}
 						mood={state.mood}
-						engaged={engaged}
+						engaged={interaction.reaction !== "rest"}
+						gaze={interaction.gaze}
+						reaction={interaction.reaction}
 					/>
 				)}
 			</button>
-			<span className={cn("companion-hint")} aria-hidden="true">
-				Click to chat · Drag to move
-			</span>
 			<CompanionChat
 				snapshot={chat.snapshot}
 				open={chat.open}

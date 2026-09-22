@@ -29,13 +29,10 @@ export function CompanionChat({
 	const [sendError, setSendError] = useState<string | null>(null);
 	const composer = useRef<HTMLTextAreaElement>(null);
 	const sendButton = useRef<HTMLButtonElement>(null);
-	const transcript = useRef<HTMLDivElement>(null);
+	const transcript = useRef<HTMLElement>(null);
 	const composing = useRef(false);
 	const inFlight = useRef(false);
-	const followsLatest = useRef(true);
-	const savedScrollTop = useRef(0);
-	const previousSession = useRef(snapshot.sessionId);
-	const headingId = useId();
+	const previousReply = useRef("");
 	const hintId = useId();
 	const errorId = useId();
 	const error =
@@ -43,23 +40,34 @@ export function CompanionChat({
 	const canSend = snapshot.canSend && !sending;
 	const busy =
 		sending || snapshot.status === "working" || snapshot.status === "loading";
+	const reply = snapshot.messages
+		.filter((message) => message.role === "assistant")
+		.at(-1);
+	const replyKey = `${snapshot.sessionId ?? ""}:${reply?.id ?? ""}`;
+	const status = sending
+		? "Sending…"
+		: snapshot.status === "loading"
+			? "Loading…"
+			: snapshot.status === "working"
+				? "Working…"
+				: "";
 
 	useEffect(() => {
 		if (open) composer.current?.focus({ preventScroll: true });
 	}, [open]);
 
-	// New messages and composer/status changes can both change the scroll range.
 	useLayoutEffect(() => {
-		if (previousSession.current !== snapshot.sessionId) {
-			previousSession.current = snapshot.sessionId;
-			followsLatest.current = true;
-			savedScrollTop.current = 0;
-		}
-		const viewport = transcript.current;
-		if (!open || !viewport) return;
-		viewport.scrollTop = followsLatest.current
-			? viewport.scrollHeight
-			: savedScrollTop.current;
+		if (previousReply.current === replyKey) return;
+		previousReply.current = replyKey;
+		// Each new answer starts at its beginning; rerenders never move the reader.
+		if (transcript.current) transcript.current.scrollTop = 0;
+	}, [replyKey]);
+
+	useLayoutEffect(() => {
+		const input = composer.current;
+		if (!open || !input) return;
+		input.style.height = "32px";
+		input.style.height = `${Math.max(32, Math.min(64, input.scrollHeight))}px`;
 	});
 
 	async function submit() {
@@ -71,18 +79,12 @@ export function CompanionChat({
 		setSendError(null);
 		try {
 			if (await onSend(text)) {
-				// A draft edited during delivery belongs to the next message.
 				setDraft((current) => (current === submittedDraft ? "" : current));
-				followsLatest.current = true;
 			} else {
-				setSendError(
-					"Delivery could not be confirmed. Your draft is saved here.",
-				);
+				setSendError("Send could not be confirmed. Your draft is saved.");
 			}
 		} catch {
-			setSendError(
-				"Delivery could not be confirmed. Your draft is saved here.",
-			);
+			setSendError("Send could not be confirmed. Your draft is saved.");
 		} finally {
 			inFlight.current = false;
 			setSending(false);
@@ -95,7 +97,7 @@ export function CompanionChat({
 	return (
 		<section
 			className={cn("companion-chat")}
-			aria-labelledby={headingId}
+			aria-label="Companion chat"
 			hidden={!open}
 			onKeyDown={(event) => {
 				if (
@@ -108,103 +110,24 @@ export function CompanionChat({
 				}
 			}}
 		>
-			<header className={cn("companion-chat-header")}>
-				<h2
-					id={headingId}
-					className={cn("companion-chat-title")}
-					title={snapshot.title || "Local Operator"}
+			{reply && (
+				<section
+					ref={transcript}
+					className={cn("companion-chat-transcript companion-chat-reply")}
+					aria-label="Latest reply"
+					// biome-ignore lint/a11y/noNoninteractiveTabindex: The bounded reply needs keyboard focus for scrolling.
+					tabIndex={0}
 				>
-					{snapshot.title || "Local Operator"}
-				</h2>
-				<div className={cn("companion-chat-actions")}>
-					<Button
-						type="button"
-						variant="ghost"
-						size="icon-sm"
-						className={cn("companion-chat-button")}
-						aria-label="New chat"
-						title="New chat"
-						disabled={busy}
-						onClick={() => {
-							setSendError(null);
-							onNewChat();
-							composer.current?.focus({ preventScroll: true });
-						}}
-					>
-						<Plus size={14} aria-hidden="true" />
-					</Button>
-					<Button
-						type="button"
-						variant="ghost"
-						size="icon-sm"
-						className={cn("companion-chat-button")}
-						aria-label="Open chat in the full app"
-						title="Open in the full app"
-						disabled={!snapshot.sessionId}
-						onClick={onExpand}
-					>
-						<ArrowUpRight size={14} aria-hidden="true" />
-					</Button>
-					<Button
-						type="button"
-						variant="ghost"
-						size="icon-sm"
-						className={cn("companion-chat-button")}
-						aria-label="Collapse chat"
-						title="Collapse chat"
-						onClick={onCollapse}
-					>
-						<ChevronUp size={14} aria-hidden="true" />
-					</Button>
-				</div>
-			</header>
-
-			<div
-				ref={transcript}
-				className={cn("companion-chat-transcript")}
-				onScroll={(event) => {
-					if (!open) return;
-					const viewport = event.currentTarget;
-					savedScrollTop.current = viewport.scrollTop;
-					followsLatest.current =
-						viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop <
-						32;
-				}}
-			>
-				{snapshot.messages.length === 0 && snapshot.status !== "loading" ? (
-					<div className={cn("companion-chat-empty")}>
-						<p>What can I help with?</p>
-						<span>Uses your default Local Operator model.</span>
-					</div>
-				) : (
-					<ol
-						className={cn("companion-chat-messages")}
-						aria-label="Chat messages"
-						aria-live="polite"
-						aria-relevant="additions text"
-					>
-						{snapshot.messages.map((message) => (
-							<li
-								key={message.id}
-								className={cn(
-									"companion-chat-message",
-									message.role === "user" && "companion-chat-message-user",
-								)}
-							>
-								<span className={cn("companion-chat-speaker")}>
-									{message.role === "user" ? "You" : "Local Operator"}
-								</span>
-								<p>{message.text}</p>
-							</li>
-						))}
-					</ol>
-				)}
-			</div>
+					<p aria-live="polite" aria-atomic="true">
+						{reply.text}
+					</p>
+				</section>
+			)}
 
 			<div className={cn("companion-chat-compose-area")}>
 				{snapshot.status === "attention" && (
 					<div className={cn("companion-chat-attention")}>
-						<output>Needs your input in the full app.</output>
+						<output>Needs your input</output>
 						<Button
 							type="button"
 							variant="secondary"
@@ -213,7 +136,7 @@ export function CompanionChat({
 							disabled={!snapshot.sessionId}
 							onClick={onExpand}
 						>
-							Open
+							Open app
 						</Button>
 					</div>
 				)}
@@ -222,15 +145,9 @@ export function CompanionChat({
 						{error}
 					</p>
 				)}
-				{!error && snapshot.status !== "attention" && (
+				{status && !error && snapshot.status !== "attention" && (
 					<output className={cn("companion-chat-status")} aria-live="polite">
-						{sending
-							? "Sending…"
-							: snapshot.status === "loading"
-								? "Loading chat…"
-								: snapshot.status === "working"
-									? "Working…"
-									: ""}
+						{status}
 					</output>
 				)}
 				<form
@@ -243,14 +160,16 @@ export function CompanionChat({
 					<Textarea
 						ref={composer}
 						className={cn("companion-chat-input")}
-						rows={2}
+						rows={1}
 						maxLength={COMPANION_CHAT_MAX_CHARS}
 						readOnly={sending}
 						value={draft}
 						aria-label="Message Local Operator"
 						aria-describedby={error ? `${hintId} ${errorId}` : hintId}
-						placeholder="Ask me anything…"
-						onChange={(event) => setDraft(event.target.value)}
+						placeholder="Ask anything…"
+						onChange={(event) => {
+							if (!inFlight.current) setDraft(event.target.value);
+						}}
 						onCompositionStart={() => {
 							composing.current = true;
 						}}
@@ -270,24 +189,73 @@ export function CompanionChat({
 							}
 						}}
 					/>
-					<Button
-						ref={sendButton}
-						type="submit"
-						size="icon"
-						variant="primary"
-						className={cn("companion-chat-send")}
-						aria-label="Send message"
-						title="Send message"
-						disabled={!canSend || !draft.trim()}
-					>
-						<ArrowUp size={16} aria-hidden="true" />
-					</Button>
+					<div className={cn("companion-chat-actions")}>
+						{snapshot.sessionId && (
+							<>
+								<Button
+									type="button"
+									variant="ghost"
+									size="icon-sm"
+									className={cn("companion-chat-button")}
+									aria-label="New chat"
+									title="New chat"
+									disabled={busy}
+									onClick={() => {
+										setSendError(null);
+										onNewChat();
+										composer.current?.focus({ preventScroll: true });
+									}}
+								>
+									<Plus size={14} aria-hidden="true" />
+								</Button>
+								<Button
+									type="button"
+									variant="ghost"
+									size="icon-sm"
+									className={cn("companion-chat-button")}
+									aria-label="Open chat in the full app"
+									title="Open in the full app"
+									disabled={!snapshot.sessionId}
+									onClick={onExpand}
+								>
+									<ArrowUpRight size={14} aria-hidden="true" />
+								</Button>
+							</>
+						)}
+						<Button
+							ref={sendButton}
+							type="submit"
+							size="icon"
+							variant="primary"
+							className={cn("companion-chat-send")}
+							aria-label="Send message"
+							title="Send message"
+							disabled={!canSend || !draft.trim()}
+						>
+							<ArrowUp size={16} aria-hidden="true" />
+						</Button>
+						<Button
+							type="button"
+							variant="ghost"
+							size="icon-sm"
+							className={cn("companion-chat-button")}
+							aria-label="Collapse chat"
+							title="Collapse chat"
+							onClick={onCollapse}
+						>
+							<ChevronUp size={14} aria-hidden="true" />
+						</Button>
+					</div>
 				</form>
-				<p id={hintId} className={cn("companion-chat-hint")}>
-					{draft.length >= COMPANION_CHAT_MAX_CHARS - 1000
-						? `${draft.length.toLocaleString()} / ${COMPANION_CHAT_MAX_CHARS.toLocaleString()} characters`
-						: "Enter to send · Shift+Enter for a new line"}
-				</p>
+				<span id={hintId} className={cn("companion-chat-sr-only")}>
+					Enter to send. Shift+Enter for a new line.
+				</span>
+				{draft.length >= COMPANION_CHAT_MAX_CHARS - 1000 && (
+					<output className={cn("companion-chat-count")}>
+						{draft.length.toLocaleString()} /{" "}
+						{COMPANION_CHAT_MAX_CHARS.toLocaleString()}
+					</output>
+				)}
 			</div>
 		</section>
 	);

@@ -89,14 +89,14 @@ test("position restoration remains on the selected display, including negative c
 			{ x: -3000, y: 5000 },
 			{ x: -1920, y: 40, width: 1920, height: 1040 },
 		),
-		{ x: -1920, y: 860 },
+		{ x: -1920, y: 944 },
 	);
 	assert.deepEqual(
 		clampCompanionPosition(
 			{ x: 9000, y: -100 },
 			{ x: 0, y: 24, width: 1440, height: 876 },
 		),
-		{ x: 1224, y: 24 },
+		{ x: 1308, y: 24 },
 	);
 });
 test("corrupt preferences cannot move a window to nonfinite coordinates", () => {
