@@ -66,6 +66,7 @@ export type RaiseTrigger =
 	| "initial-present"
 	| "companion-present"
 	| "companion-click"
+	| "companion-chat"
 	| "second-instance"
 	| "banner-click"
 	| "viewer-focus"
@@ -297,6 +298,7 @@ const REFUSABLE_DELIVERY: Record<
 	"initial-present": "never",
 	"companion-present": "never",
 	"companion-click": "never",
+	"companion-chat": "never",
 	// THE ONE REFUSAL. The residual above says what it rests on and what it cannot
 	// see.
 	"second-instance": "when-its-plan-is-silent",

@@ -3114,6 +3114,8 @@ app
 			preload: join(__dirname, "../preload/companion.js"),
 			preferencesPath: join(app.getPath("userData"), "desktop-companion.json"),
 			skinsDirectory: join(app.getPath("userData"), "companions"),
+			cwd: app.getPath("home"),
+			requestDesktop: (input) => backendService.requestDesktop(input),
 			headless: windowLaunch.mode === "headless",
 			readCatalogue: () =>
 				backendService.requestDesktop({ op: "sessions.list", limit: 500 }),

@@ -1,3 +1,4 @@
+import type { CompanionChatSnapshot } from "./companion-chat";
 import type { CompanionAppearance } from "./companion-skin";
 
 export type CompanionMood =
@@ -116,34 +117,42 @@ export function companionPreferences(value: unknown): CompanionPreferences {
 }
 
 export const COMPANION_SIZE = { width: 216, height: 220 };
+export const COMPANION_CHAT_SIZE = { width: 380, height: 600 };
 
 export function clampCompanionPosition(
 	point: { x: number; y: number },
 	area: { x: number; y: number; width: number; height: number },
+	size = COMPANION_SIZE,
 ): { x: number; y: number } {
 	return {
 		x: Math.round(
 			Math.max(
 				area.x,
-				Math.min(
-					point.x,
-					area.x + Math.max(0, area.width - COMPANION_SIZE.width),
-				),
+				Math.min(point.x, area.x + Math.max(0, area.width - size.width)),
 			),
 		),
 		y: Math.round(
 			Math.max(
 				area.y,
-				Math.min(
-					point.y,
-					area.y + Math.max(0, area.height - COMPANION_SIZE.height),
-				),
+				Math.min(point.y, area.y + Math.max(0, area.height - size.height)),
 			),
 		),
 	};
 }
 
+export interface CompanionChatView {
+	open: boolean;
+	snapshot: CompanionChatSnapshot;
+}
+
 export interface CompanionBridge {
+	getChat(): Promise<CompanionChatView>;
+	onChat(listener: (view: CompanionChatView) => void): () => void;
+	sendMessage(text: string): Promise<boolean>;
+	newChat(): void;
+	collapseChat(): void;
+	expandChat(): void;
+	openTask(): void;
 	getState(): Promise<CompanionState>;
 	onState(listener: (state: CompanionState) => void): () => void;
 	getAppearance(): Promise<CompanionAppearance>;

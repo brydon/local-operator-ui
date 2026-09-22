@@ -4,6 +4,7 @@ import type { IpcMainEvent, IpcMainInvokeEvent } from "electron";
 import { BUILTIN_COMPANIONS } from "../shared/companion-skin";
 import type { CompanionAppearance } from "../shared/companion-skin";
 import {
+	COMPANION_CHAT_SIZE,
 	COMPANION_OFFLINE,
 	COMPANION_SIZE,
 	clampCompanionPosition,
@@ -14,8 +15,9 @@ import type {
 	CompanionPreferences,
 	CompanionState,
 } from "../shared/desktop-companion";
+import { CompanionChatService } from "./companion-chat";
 import { CompanionSkinLibrary } from "./companion-skins";
-import { presentWindow } from "./window-raise";
+import { presentWindow, raiseWindow } from "./window-raise";
 
 interface CompanionOptions {
 	url: string;
@@ -23,6 +25,8 @@ interface CompanionOptions {
 	preferencesPath: string;
 	skinsDirectory: string;
 	headless: boolean;
+	cwd: string;
+	requestDesktop(input: unknown): Promise<{ status: number; body: unknown }>;
 	readCatalogue(): Promise<{ status: number; body: unknown }>;
 	openChat(sessionId: string | null): void;
 	visibilityChanged(enabled: boolean): void;
@@ -30,9 +34,11 @@ interface CompanionOptions {
 	report(message: string): void;
 }
 
-/** A separate, narrowly privileged window. It observes work; it never runs an agent. */
+/** A separate, narrowly privileged window with a text-only desktop chat client. */
 export class DesktopCompanion {
 	private window: BrowserWindow | null = null;
+	private chat: CompanionChatService;
+	private chatOpen = false;
 	private preferences: CompanionPreferences;
 	private skins: CompanionSkinLibrary;
 	private state: CompanionState = COMPANION_OFFLINE;
@@ -52,6 +58,11 @@ export class DesktopCompanion {
 		this.onDisplayChanged = this.onDisplayChanged.bind(this);
 		this.onAction = this.onAction.bind(this);
 		this.skins = new CompanionSkinLibrary(options.skinsDirectory);
+		this.chat = new CompanionChatService({
+			requestDesktop: options.requestDesktop,
+			cwd: options.cwd,
+			onChange: () => this.publishChat(),
+		});
 		try {
 			this.preferences = companionPreferences(
 				JSON.parse(readFileSync(options.preferencesPath, "utf8")),
@@ -65,6 +76,16 @@ export class DesktopCompanion {
 		ipcMain.handle("companion:get-appearance", (event) =>
 			this.trusted(event) ? this.appearance : null,
 		);
+		ipcMain.handle("companion:get-chat", (event) =>
+			this.trusted(event)
+				? { open: this.chatOpen, snapshot: this.chat.snapshot }
+				: null,
+		);
+		ipcMain.handle("companion:send", async (event, text: unknown) => {
+			if (!this.trusted(event) || !this.chatOpen || typeof text !== "string")
+				return false;
+			return (await this.chat.send(text)).accepted;
+		});
 		ipcMain.on("companion:action", this.onAction);
 		screen.on("display-removed", this.onDisplayChanged);
 		screen.on("display-metrics-changed", this.onDisplayChanged);
@@ -103,6 +124,7 @@ export class DesktopCompanion {
 
 	private trusted(event: IpcMainEvent | IpcMainInvokeEvent): boolean {
 		return (
+			this.enabled &&
 			!!this.window &&
 			!this.window.isDestroyed() &&
 			event.sender === this.window.webContents &&
@@ -113,6 +135,7 @@ export class DesktopCompanion {
 
 	setEnabled(enabled: boolean): void {
 		if (this.disposed) return;
+		const wasEnabled = this.preferences.enabled;
 		this.preferences.enabled = enabled;
 		this.save();
 		this.options.visibilityChanged(enabled);
@@ -123,11 +146,21 @@ export class DesktopCompanion {
 			this.poll = null;
 			this.debounce = null;
 			this.dragOrigin = null;
-			this.window?.destroy();
-			this.window = null;
+			this.layoutChat(false);
+			this.chatOpen = false;
+			this.window?.hide();
 			return;
 		}
-		if (this.window && !this.window.isDestroyed()) return;
+		if (this.window && !this.window.isDestroyed()) {
+			if (wasEnabled) return;
+			presentWindow(this.window, this.options.headless ? "never" : "inactive", {
+				trigger: "companion-present",
+				report: this.options.report,
+			});
+			this.poll = setInterval(() => this.refresh(), 5000);
+			this.refresh();
+			return;
+		}
 		const area = screen.getPrimaryDisplay().workArea;
 		const point = this.preferences.position ?? {
 			x: area.x + area.width - COMPANION_SIZE.width - 24,
@@ -175,6 +208,7 @@ export class DesktopCompanion {
 			event.preventDefault(),
 		);
 		window.once("ready-to-show", () => {
+			if (!this.enabled || this.window !== window) return;
 			presentWindow(window, this.options.headless ? "never" : "inactive", {
 				trigger: "companion-present",
 				report: this.options.report,
@@ -228,35 +262,96 @@ export class DesktopCompanion {
 			this.state = next;
 			if (this.window && !this.window.isDestroyed())
 				this.window.webContents.send("companion:state", next);
+			if (this.chatOpen) void this.chat.refresh();
 		}
 		if (this.dirty) this.refresh();
 	}
 
+	private publishChat(): void {
+		if (this.window && !this.window.isDestroyed())
+			this.window.webContents.send("companion:chat", {
+				open: this.chatOpen,
+				snapshot: this.chat.snapshot,
+			});
+	}
+
+	private showChat(): void {
+		if (!this.window) return;
+		this.layoutChat(true);
+		void this.chat.open();
+		raiseWindow(this.window, this.options.headless ? "never" : "focus", {
+			trigger: "companion-chat",
+			report: this.options.report,
+		});
+	}
+
+	/** Keep the lower-right anchor stable through expansion, collapse and dragging. */
+	private layoutChat(open: boolean): void {
+		if (!this.window) return;
+		const bounds = this.window.getBounds();
+		const area = screen.getDisplayMatching(bounds).workArea;
+		const target = open ? COMPANION_CHAT_SIZE : COMPANION_SIZE;
+		const size = {
+			width: Math.min(target.width, area.width),
+			height: Math.min(target.height, area.height),
+		};
+		const point = clampCompanionPosition(
+			{
+				x: bounds.x + bounds.width - size.width,
+				y: bounds.y + bounds.height - size.height,
+			},
+			area,
+			size,
+		);
+		this.chatOpen = open;
+		this.window.setBounds({ ...point, ...size }, false);
+		this.rememberPosition();
+		this.save();
+		this.publishChat();
+	}
+
 	private clamp(point: Electron.Point): Electron.Point {
-		const area = screen.getDisplayMatching({
-			...point,
-			...COMPANION_SIZE,
-		}).workArea;
-		return clampCompanionPosition(point, area);
+		const bounds = this.window?.getBounds() ?? COMPANION_SIZE;
+		const size = { width: bounds.width, height: bounds.height };
+		const area = screen.getDisplayMatching({ ...point, ...size }).workArea;
+		return clampCompanionPosition(point, area, size);
+	}
+
+	private rememberPosition(): void {
+		if (!this.window) return;
+		const bounds = this.window.getBounds();
+		this.preferences.position = {
+			x: bounds.x + bounds.width - COMPANION_SIZE.width,
+			y: bounds.y + bounds.height - COMPANION_SIZE.height,
+		};
 	}
 
 	private move(point: Electron.Point): void {
 		const position = this.clamp(point);
 		this.window?.setPosition(position.x, position.y, false);
-		this.preferences.position = position;
+		this.rememberPosition();
 	}
 
 	private onDisplayChanged(): void {
 		if (!this.window) return;
-		const [x, y] = this.window.getPosition();
-		this.move({ x, y });
-		this.save();
+		this.layoutChat(this.chatOpen);
 	}
 
 	private onAction(event: IpcMainEvent, action: unknown, value: unknown): void {
 		if (!this.trusted(event) || !this.window) return;
 		if (action === "hide") this.setEnabled(false);
-		else if (action === "open") this.options.openChat(this.state.sessionId);
+		else if (action === "open") this.showChat();
+		else if (action === "open-task")
+			this.options.openChat(this.state.sessionId);
+		else if (action === "collapse-chat") this.layoutChat(false);
+		else if (action === "expand-chat")
+			this.options.openChat(this.chat.snapshot.sessionId);
+		else if (
+			action === "new-chat" &&
+			this.chat.snapshot.status !== "working" &&
+			this.chat.snapshot.status !== "loading"
+		)
+			this.chat.newChat();
 		else if (
 			action === "interactive" &&
 			typeof value === "boolean" &&
@@ -287,7 +382,7 @@ export class DesktopCompanion {
 					value === "end" && this.dragOrigin && !this.dragOrigin.moved;
 				this.dragOrigin = null;
 				this.save();
-				if (clicked) this.options.openChat(this.state.sessionId);
+				if (clicked) this.showChat();
 			}
 		} else if (action === "nudge" && typeof value === "string") {
 			const offsets: Record<string, [number, number]> = {
@@ -323,11 +418,14 @@ export class DesktopCompanion {
 
 	dispose(): void {
 		this.disposed = true;
+		this.chat.dispose();
 		this.generation++;
 		if (this.poll) clearInterval(this.poll);
 		if (this.debounce) clearTimeout(this.debounce);
 		ipcMain.removeHandler("companion:get-state");
 		ipcMain.removeHandler("companion:get-appearance");
+		ipcMain.removeHandler("companion:get-chat");
+		ipcMain.removeHandler("companion:send");
 		ipcMain.removeListener("companion:action", this.onAction);
 		screen.removeListener("display-removed", this.onDisplayChanged);
 		screen.removeListener("display-metrics-changed", this.onDisplayChanged);

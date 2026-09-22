@@ -3,7 +3,26 @@
 Choose a PNG for a one-look character, or a JSON manifest for multiple
 expressions, from **View > Companion character > Add character…**.
 The desktop companion also offers three built-in characters: Sprout, Hoodie
-and Pixel. It does not need a plugin, an API key or a model request.
+and Pixel. Displaying and customizing a character needs no plugin, API key or model request.
+
+Click the character to chat beside it. Enter sends; Shift+Enter adds a line.
+Collapse the card (or press Escape inside it) to return to the small pet; your
+unsent draft and conversation remain there when you reopen it. The arrow in the
+chat header opens that conversation in the full app. The status bubble opens
+the task it reports, without changing the companion's own conversation.
+
+A new companion conversation uses Local Operator's configured default model
+and your home directory as its starting folder. Sending a message uses your
+normal provider and credentials. The panel shows recent user messages and
+completed assistant prose; tool details, long history, attachments, model
+selection and approval/question controls remain in the full app. A pending
+approval or question offers **Open app** and prevents further inline sends.
+
+The panel keeps a draft if delivery cannot be confirmed. Retrying the same
+text reuses its request identifier, so a lost response does not intentionally
+create a second turn. A new chat starts only when you send its first message.
+Drafts are kept while the card is collapsed, and hiding the companion. They are not saved across quitting the app
+or closing its native window.
 
 For the quickest start, select a transparent PNG of your character. Its filename
 becomes its name, and it uses that image for every task state while the status

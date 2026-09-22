@@ -48,9 +48,12 @@ The Local Operator UI is a user interface for managing and interacting with the 
 ## Desktop companion
 
 A small floating character shows when Local Operator is working, needs your
-attention, or has finished. Click it to open chat, drag it to move, or use the
-arrow keys while it is focused. Its position and visibility are remembered.
-It observes the existing task status without making model calls.
+attention, or has finished. Click the character to chat in a compact panel,
+drag it to move, or use the arrow keys while it is focused. Collapse the panel
+or hide the pet without losing your draft. Expand a conversation into the full
+app for approvals, files, model selection, or a larger workspace. Its position
+and visibility are remembered. Observing task status makes no model calls;
+sending a message uses your configured Local Operator provider.
 
 Use **View > Desktop companion** to show or hide it, and **View > Companion
 character** to choose Sprout, Hoodie, or Pixel. **Add character…** accepts a

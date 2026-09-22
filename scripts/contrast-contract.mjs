@@ -328,6 +328,33 @@ const KEYCAP_DELTA_E = 2.0;
  */
 const CONTROLS = [
 	{
+		name: "companion chat frame, composer and Open control",
+		on: GROUNDS,
+		fill: "surface",
+		border: "borderControl",
+		ink: "ink",
+	},
+	{
+		name: "companion chat Open control (hover)",
+		on: ["surface"],
+		fill: "elevated",
+		border: "borderControl",
+		ink: "ink",
+	},
+	...[
+		["rest", "accent"],
+		["hover", "accentHover"],
+		["pressed", "accentActive"],
+	].map(([state, fill]) => ({
+		name: `companion chat Send control (${state})`,
+		on: ["surface"],
+		fill,
+		border: fill,
+		ink: "onAccent",
+	})),
+	// Borderless toolbar icons and message text use the INKS x ground floors;
+	// their hover grounds and user-message wash are not control boundaries.
+	{
 		name: "companion speech bubble and hide control",
 		on: GROUNDS,
 		fill: "surface",

@@ -139,3 +139,18 @@ button:focus-visible {
 .companion:focus-within .companion-hint {
 	visibility: visible;
 }
+
+.companion--chat .companion-hint {
+	display: none;
+}
+
+.companion--chat .companion-character {
+	margin-bottom: 8px;
+}
+
+@media (max-height: 480px) {
+	.companion--chat .companion-character {
+		width: 90px;
+		height: 90px;
+	}
+}

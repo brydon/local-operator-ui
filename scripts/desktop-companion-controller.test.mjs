@@ -35,9 +35,10 @@ function fixture(t, { headless = true } = {}) {
 	let timerId = 0;
 	const windows = [];
 	let cursor = { x: 400, y: 400 };
+	let workArea = { x: 0, y: 0, width: 1920, height: 1080 };
 	const screen = new EventEmitter();
 	screen.getPrimaryDisplay = screen.getDisplayMatching = () => ({
-		workArea: { x: 0, y: 0, width: 1920, height: 1080 },
+		workArea,
 	});
 	screen.getCursorScreenPoint = () => cursor;
 	class FakeWindow extends EventEmitter {
@@ -45,7 +46,9 @@ function fixture(t, { headless = true } = {}) {
 			super();
 			this.options = options;
 			this.position = [options.x, options.y];
+			this.size = { width: options.width, height: options.height };
 			this.destroyed = false;
+			this.hidden = true;
 			this.presentations = [];
 			this.messages = [];
 			this.webContents = new EventEmitter();
@@ -66,6 +69,9 @@ function fixture(t, { headless = true } = {}) {
 		isMinimized() {
 			return false;
 		}
+		hide() {
+			this.hidden = true;
+		}
 		setVisibleOnAllWorkspaces(...args) {
 			this.workspaces = args;
 		}
@@ -79,15 +85,25 @@ function fixture(t, { headless = true } = {}) {
 		getPosition() {
 			return this.position;
 		}
+		getBounds() {
+			return { x: this.position[0], y: this.position[1], ...this.size };
+		}
+		setBounds({ x, y, width, height }) {
+			assert.ok([x, y, width, height].every(Number.isFinite));
+			this.setPosition(x, y);
+			this.size = { width, height };
+		}
 		destroy() {
 			if (this.destroyed) return;
 			this.destroyed = true;
 			this.emit("closed");
 		}
 		showInactive() {
+			this.hidden = false;
 			this.presentations.push("inactive");
 		}
 		show() {
+			this.hidden = false;
 			this.presentations.push("focus");
 		}
 		focus() {
@@ -119,6 +135,8 @@ function fixture(t, { headless = true } = {}) {
 		clearInterval: (id) => intervals.delete(id),
 	});
 	const requests = [];
+	const desktopRequests = [];
+	let admitted = false;
 	const opened = [];
 	const visibility = [];
 	const companion = new module.exports.DesktopCompanion({
@@ -127,6 +145,48 @@ function fixture(t, { headless = true } = {}) {
 		preferencesPath,
 		skinsDirectory: join(directory, "skins"),
 		headless,
+		cwd: directory,
+		requestDesktop: async (input) => {
+			desktopRequests.push(input);
+			if (input.op === "sessions.create")
+				return {
+					status: 200,
+					body: { result: { session_id: "012345abcdef" } },
+				};
+			if (input.op === "sessions.message") {
+				admitted = true;
+				return {
+					status: 200,
+					body: {
+						result: {
+							status: "admitted",
+							command_id: input.requestId,
+						},
+					},
+				};
+			}
+			assert.equal(input.op, "sessions.get");
+			return {
+				status: 200,
+				body: {
+					result: {
+						session_id: input.sessionId,
+						payload: {
+							frontend: {
+								snapshot: {
+									session_id: input.sessionId,
+									streaming: admitted,
+									pending_gate: null,
+									epoch: "test-owner",
+									generation: admitted ? 1 : 0,
+								},
+							},
+							history: { entries: [] },
+						},
+					},
+				},
+			};
+		},
 		readCatalogue: () =>
 			new Promise((resolve, reject) => requests.push({ resolve, reject })),
 		openChat: (id) => opened.push(id),
@@ -149,6 +209,7 @@ function fixture(t, { headless = true } = {}) {
 		ipcMain,
 		screen,
 		requests,
+		desktopRequests,
 		opened,
 		visibility,
 		intervals,
@@ -156,10 +217,16 @@ function fixture(t, { headless = true } = {}) {
 		preferences: () => JSON.parse(readFileSync(preferencesPath, "utf8")),
 		trusted,
 		state: () => handlers.get("companion:get-state")(trusted()),
+		chat: () => handlers.get("companion:get-chat")(trusted()),
+		send: (text, event = trusted()) =>
+			handlers.get("companion:send")(event, text),
 		action: (action, value, event = trusted()) =>
 			ipcMain.emit("companion:action", event, action, value),
 		cursor: (point) => {
 			cursor = point;
+		},
+		workArea: (area) => {
+			workArea = area;
 		},
 		flush: async () => {
 			for (const [id, callback] of [...timeouts]) {
@@ -193,6 +260,10 @@ test("headless companion never presents or changes desktop workspaces", (t) => {
 	assert.equal(window.options.webPreferences.zoomFactor, 1);
 	assert.deepEqual(window.presentations, []);
 	assert.equal(window.workspaces, undefined);
+	f.action("open");
+	assert.equal(f.chat().open, true);
+	assert.deepEqual(window.presentations, []);
+	assert.deepEqual(f.desktopRequests, []);
 });
 
 test("visible companion presents once without focus and accepts the first click", (t) => {
@@ -207,7 +278,7 @@ test("visible companion presents once without focus and accepts the first click"
 	if (process.platform === "darwin") assert.equal(window.options.type, "panel");
 });
 
-test("IPC requires this companion's exact top-level document and rejects malformed actions", (t) => {
+test("IPC requires this companion's exact top-level document and rejects malformed actions", async (t) => {
 	const f = fixture(t);
 	const window = f.windows[0];
 	assert.equal(window.options.webPreferences.sandbox, true);
@@ -232,13 +303,19 @@ test("IPC requires this companion's exact top-level document and rejects malform
 		{ sender: window.webContents, senderFrame: null },
 	]) {
 		f.action("open", undefined, event);
+		f.action("open-task", undefined, event);
+		f.action("expand-chat", undefined, event);
 		f.action("hide", undefined, event);
 		assert.equal(f.handlers.get("companion:get-state")(event), null);
 		assert.equal(f.handlers.get("companion:get-appearance")(event), null);
+		assert.equal(f.handlers.get("companion:get-chat")(event), null);
+		assert.equal(await f.send("Should not send", event), false);
 	}
 	window.webContents.mainFrame.url = "https://example.invalid/";
 	f.action("open");
 	assert.equal(f.handlers.get("companion:get-state")(f.trusted()), null);
+	assert.equal(f.handlers.get("companion:get-chat")(f.trusted()), null);
+	assert.equal(await f.send("Should not send"), false);
 	window.webContents.mainFrame.url = "file:///test/companion.html";
 	const position = [...window.position];
 	for (const value of [
@@ -259,8 +336,13 @@ test("IPC requires this companion's exact top-level document and rejects malform
 	assert.equal(window.ignoresMouse, true);
 	assert.deepEqual(window.position, position);
 	assert.deepEqual(f.opened, []);
+	assert.equal(await f.send("Chat is collapsed"), false);
 	f.action("open");
-	assert.deepEqual(f.opened, [null]);
+	assert.equal(f.chat().open, true);
+	assert.deepEqual(f.opened, []);
+	for (const value of [null, {}, 42, ["text"], "", " ", "x".repeat(16_001)])
+		assert.equal(await f.send(value), false);
+	assert.deepEqual(f.desktopRequests, []);
 });
 
 test("catalogue reads coalesce and serialize, then reject responses from a disabled generation", async (t) => {
@@ -277,7 +359,6 @@ test("catalogue reads coalesce and serialize, then reject responses from a disab
 	assert.equal(f.state().mood, "working");
 	await f.flush();
 	assert.equal(f.requests.length, 1);
-	const oldWindow = f.windows[0];
 	f.companion.setEnabled(false);
 	f.companion.setEnabled(true);
 	f.requests.shift().resolve(catalogue("complete", "old-session"));
@@ -293,8 +374,6 @@ test("catalogue reads coalesce and serialize, then reject responses from a disab
 	f.requests.shift().resolve(catalogue("approval", "new-session"));
 	await settle();
 	assert.equal(f.state().sessionId, "new-session");
-	f.action("hide", undefined, f.trusted(oldWindow));
-	assert.equal(f.companion.enabled, true);
 	f.companion.refresh();
 	await f.flush();
 	f.requests.shift().reject(new Error("Connection lost"));
@@ -303,7 +382,7 @@ test("catalogue reads coalesce and serialize, then reject responses from a disab
 	assert.equal(f.state().sessionId, null);
 });
 
-test("dragging moves and saves without opening chat; clicking opens the observed session", async (t) => {
+test("dragging moves and saves without opening chat; clicking opens inline chat", async (t) => {
 	const f = fixture(t);
 	await f.flush();
 	f.requests.shift().resolve(catalogue("busy"));
@@ -322,11 +401,14 @@ test("dragging moves and saves without opening chat; clicking opens the observed
 	assert.deepEqual(f.opened, []);
 	f.action("drag", "start");
 	f.action("drag", "end");
-	assert.deepEqual(f.opened, ["session-a"]);
+	assert.equal(f.chat().open, true);
+	assert.deepEqual(f.opened, []);
+	assert.deepEqual(f.desktopRequests, []);
+	f.action("collapse-chat");
 	f.action("drag", "start");
 	window.emit("blur");
 	f.action("drag", "end");
-	assert.equal(f.opened.length, 1);
+	assert.equal(f.chat().open, false);
 	f.action("interactive", false);
 	assert.equal(window.ignoresMouse, true);
 	f.action("interactive", true);
@@ -335,10 +417,138 @@ test("dragging moves and saves without opening chat; clicking opens the observed
 	assert.equal(window.position[0], x - 64);
 });
 
+test("inline chat preserves its lower-right anchor through collapse and dragging", (t) => {
+	const f = fixture(t);
+	const window = f.windows[0];
+	const before = window.getBounds();
+	f.action("open");
+	const expanded = window.getBounds();
+	assert.deepEqual(window.size, { width: 380, height: 600 });
+	assert.equal(expanded.x + expanded.width, before.x + before.width);
+	assert.equal(expanded.y + expanded.height, before.y + before.height);
+	assert.deepEqual(f.preferences().position, { x: before.x, y: before.y });
+	f.action("nudge", "ArrowLeft");
+	f.action("nudge", "ArrowUp");
+	f.action("collapse-chat");
+	assert.deepEqual(window.getBounds(), {
+		...before,
+		x: before.x - 24,
+		y: before.y - 24,
+	});
+	assert.equal(f.chat().open, false);
+	assert.deepEqual(f.preferences().position, {
+		x: before.x - 24,
+		y: before.y - 24,
+	});
+	f.action("open");
+	f.action("hide");
+	f.companion.setEnabled(true);
+	assert.equal(f.windows.length, 1);
+	assert.equal(window.destroyed, false);
+	assert.deepEqual(f.windows.at(-1).getBounds(), {
+		...before,
+		x: before.x - 24,
+		y: before.y - 24,
+	});
+	assert.equal(f.chat().open, false);
+});
+
+test("chat layout stays within a changed display work area", (t) => {
+	const f = fixture(t);
+	const window = f.windows[0];
+	f.action("open");
+	f.workArea({ x: -320, y: -80, width: 320, height: 420 });
+	f.screen.emit("display-metrics-changed");
+	assert.deepEqual(window.getBounds(), {
+		x: -320,
+		y: -80,
+		width: 320,
+		height: 420,
+	});
+	f.action("collapse-chat");
+	assert.deepEqual(window.getBounds(), {
+		x: -216,
+		y: 120,
+		width: 216,
+		height: 220,
+	});
+});
+
+test("hiding retains the renderer but stops polling, rejects IPC and defeats a late ready event", async (t) => {
+	const f = fixture(t, { headless: false });
+	const window = f.windows[0];
+	f.action("open");
+	f.action("hide");
+	assert.equal(window.destroyed, false);
+	assert.equal(window.hidden, true);
+	assert.equal(f.preferences().enabled, false);
+	assert.equal(f.intervals.size, 0);
+	assert.equal(f.timeouts.size, 0);
+	const presentations = [...window.presentations];
+	window.emit("ready-to-show");
+	f.action("open");
+	f.action("open-task");
+	assert.equal(f.chat(), null);
+	assert.equal(await f.send("Hidden pane cannot send"), false);
+	assert.deepEqual(window.presentations, presentations);
+	assert.deepEqual(f.opened, []);
+	assert.deepEqual(f.desktopRequests, []);
+	f.companion.setEnabled(true);
+	assert.equal(f.windows.length, 1);
+	assert.equal(window.hidden, false);
+	assert.equal(f.chat().open, false);
+	assert.equal(f.intervals.size, 1);
+	assert.deepEqual(window.presentations, [...presentations, "inactive"]);
+	f.companion.setEnabled(true);
+	assert.equal(f.intervals.size, 1);
+	assert.deepEqual(window.presentations, [...presentations, "inactive"]);
+});
+
+test("fleet changes never retarget inline chat or focus the window", async (t) => {
+	const f = fixture(t, { headless: false });
+	const window = f.windows[0];
+	window.emit("ready-to-show");
+	await f.flush();
+	f.requests.shift().resolve(catalogue("busy", "111111111111"));
+	await settle();
+	assert.deepEqual(window.presentations, ["inactive"]);
+	f.action("open");
+	assert.deepEqual(window.presentations, ["inactive", "focus", "focus"]);
+	assert.equal(f.chat().snapshot.sessionId, null);
+	assert.deepEqual(f.desktopRequests, []);
+	assert.equal(await f.send("Hello from the pet"), true);
+	assert.equal(f.chat().snapshot.sessionId, "012345abcdef");
+	assert.equal(
+		f.desktopRequests.filter((request) => request.op === "sessions.create")
+			.length,
+		1,
+	);
+	f.companion.refresh();
+	await f.flush();
+	f.requests.shift().resolve(catalogue("approval", "222222222222"));
+	await settle();
+	assert.equal(f.chat().snapshot.sessionId, "012345abcdef");
+	assert.deepEqual(window.presentations, ["inactive", "focus", "focus"]);
+	f.action("open-task");
+	f.action("expand-chat");
+	assert.deepEqual(f.opened, ["222222222222", "012345abcdef"]);
+	f.action("collapse-chat");
+	f.action("open");
+	await settle();
+	assert.equal(f.chat().snapshot.sessionId, "012345abcdef");
+	assert.equal(
+		f.desktopRequests.filter((request) => request.op === "sessions.create")
+			.length,
+		1,
+	);
+});
+
 test("native close disables the companion, cancels polling and persists the menu state", (t) => {
 	const f = fixture(t);
+	const oldWindow = f.windows[0];
 	assert.equal(f.intervals.size, 1);
 	assert.equal(f.timeouts.size, 1);
+	f.action("open");
 	f.windows[0].destroy();
 	assert.equal(f.companion.enabled, false);
 	assert.equal(f.preferences().enabled, false);
@@ -350,6 +560,13 @@ test("native close disables the companion, cancels polling and persists the menu
 	f.companion.setEnabled(true);
 	assert.equal(f.windows.length, 2);
 	assert.equal(f.intervals.size, 1);
+	assert.equal(f.chat().open, false);
+	f.action("hide", undefined, f.trusted(oldWindow));
+	assert.equal(f.companion.enabled, true);
+	assert.equal(
+		f.handlers.get("companion:get-chat")(f.trusted(oldWindow)),
+		null,
+	);
 });
 
 test("disposal unregisters IPC and display observers without disabling the next launch", (t) => {

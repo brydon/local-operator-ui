@@ -52,9 +52,37 @@ async function run() {
   const url = pathToFileURL(join(repo, "out/renderer/companion.html")).href;
   const preload = join(repo, "out/preload/companion.js");
   const prefs = join(root, "companion.json");
+  const chatId = "abcdef123456";
+  const chatRequests = [];
+  const history = [];
+  let streaming = false;
+  let generation = 0;
+  let pendingGate = null;
+  let failSend = false;
+  const requestDesktop = async input => {
+    chatRequests.push(input);
+    if (input.op === "sessions.create") return { status: 200, body: { result: { session_id: chatId } } };
+    if (input.op === "sessions.get") return { status: 200, body: { result: {
+      session_id: chatId,
+      payload: { history: { entries: history }, frontend: { snapshot: {
+        session_id: chatId, conversation_title: "A little help", streaming,
+        epoch: "fixture", generation, pending_gate: pendingGate,
+        last_turn_outcome: generation > 0 && !streaming ? "completed" : null,
+        live_events: [],
+      } } },
+    } } };
+    if (input.op === "sessions.message") {
+      if (failSend) throw new Error("Fixture lost connection");
+      history.push({ type: "message", id: input.requestId, payload: { role: "user", content: [{ text: input.text }] } });
+      streaming = true;
+      generation++;
+      return { status: 200, body: { result: { status: "admitted", command_id: input.requestId } } };
+    }
+    throw new Error("Unexpected operation " + input.op);
+  };
   companion = new DesktopCompanion({
     url, preload, preferencesPath: prefs, skinsDirectory: join(root, "skins"),
-    headless: true,
+    headless: true, cwd: root, requestDesktop,
     readCatalogue: async () => { calls++; return { status: 200, body: catalogue }; },
     openChat: id => opened.push(id),
     visibilityChanged: enabled => visibility.push(enabled),
@@ -76,6 +104,8 @@ async function run() {
   const outsider = new BrowserWindow({ show: false, focusable: false, webPreferences: { preload, sandbox: true, contextIsolation: true } });
   await outsider.loadURL(url);
   assert.equal(await outsider.webContents.executeJavaScript("window.companion.getState()"), null);
+  assert.equal(await outsider.webContents.executeJavaScript("window.companion.getChat()"), null);
+  assert.equal(await outsider.webContents.executeJavaScript("window.companion.sendMessage('unauthorized')"), false);
   await outsider.webContents.executeJavaScript("window.companion.openChat(); window.companion.hide()");
   await pause();
   assert.equal(opened.length, 0);
@@ -112,6 +142,60 @@ async function run() {
   await evaluate("document.querySelector('.companion-status').click()");
   await until(() => opened.length === 1, "click opens chat");
   assert.equal(opened[0], "fixture-chat");
+  const collapsedBounds = window.getBounds();
+  await evaluate("document.querySelector('.companion-character').click()");
+  await until(() => evaluate("!document.querySelector('.companion-chat').hidden"), "inline chat opens");
+  assert.equal(opened.length, 1, "pet click keeps conversation beside pet");
+  assert.equal(window.getBounds().width, 380);
+  assert.equal(window.isVisible(), false, "opening chat cannot present a headless window");
+  assert.equal(window.isFocused(), false);
+  assert.equal(await evaluate("document.documentElement.scrollWidth > window.innerWidth"), false);
+  const typeDraft = text => evaluate("Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(document.querySelector('textarea'), " + JSON.stringify(text) + "); document.querySelector('textarea').dispatchEvent(new Event('input', {bubbles:true}))");
+  await typeDraft("Could you help me plan a quiet afternoon?");
+  await evaluate("document.querySelector('[aria-label=\"Collapse chat\"]').click()");
+  await until(() => window.getBounds().width === 216, "collapse window");
+  assert.deepEqual(window.getBounds(), collapsedBounds, "collapse restores exact anchor");
+  await until(() => evaluate("document.activeElement?.classList.contains('companion-character')"), "collapse returns keyboard focus to pet");
+  await evaluate("document.querySelector('.companion-character').click()");
+  await until(() => evaluate("!document.querySelector('.companion-chat').hidden"), "reopen draft");
+  assert.equal(await evaluate("document.querySelector('textarea').value"), "Could you help me plan a quiet afternoon?");
+  await pause(250);
+  writeFileSync(join(out, "chat-draft.png"), (await window.webContents.capturePage()).toPNG());
+  await evaluate("document.querySelector('.companion-chat-send').click()");
+  await until(() => evaluate("document.querySelector('textarea').value === ''"), "accepted send clears draft");
+  assert.equal(chatRequests.filter(r => r.op === "sessions.message").length, 1);
+  assert.equal(await evaluate("document.querySelector('.companion-chat-send').disabled"), true);
+  history.push({ type: "message", id: "reply-1", payload: { role: "assistant", content: [{ text: "Take a short walk, make a cup of tea, and leave one hour free for something you enjoy." }] } });
+  streaming = false;
+  catalogue = { result: { sessions: [{ id: chatId, status: { code: "complete" }, attention: { unseen: true } }] } };
+  companion.refresh();
+  await until(() => evaluate("document.querySelector('.companion-chat-transcript').textContent.includes('Take a short walk')"), "durable reply appears");
+  await pause(250);
+  writeFileSync(join(out, "chat-reply-light.png"), (await window.webContents.capturePage()).toPNG());
+  await evaluate("localStorage.setItem('ui-preferences-storage', JSON.stringify({state:{themeName:'localOperatorDark'}})); window.dispatchEvent(new StorageEvent('storage'))");
+  await pause(250);
+  writeFileSync(join(out, "chat-reply-dark.png"), (await window.webContents.capturePage()).toPNG());
+  await evaluate("document.querySelector('[aria-label=\"Open chat in the full app\"]').click()");
+  await until(() => opened.length === 2, "expand conversation");
+  assert.equal(opened[1], chatId);
+  pendingGate = { type: "approval" };
+  companion.refresh();
+  await until(() => evaluate("!!document.querySelector('.companion-chat-attention')"), "approval handoff");
+  await pause(250);
+  assert.equal(await evaluate("document.querySelector('.companion-chat-send').disabled"), true);
+  writeFileSync(join(out, "chat-attention.png"), (await window.webContents.capturePage()).toPNG());
+  pendingGate = null;
+  companion.refresh();
+  await until(() => evaluate("!document.querySelector('.companion-chat-attention')"), "gate clears");
+  await pause(250);
+  failSend = true;
+  await typeDraft("A second thought");
+  await evaluate("document.querySelector('.companion-chat-send').click()");
+  await until(() => evaluate("document.querySelector('.companion-chat-error')?.textContent.includes('confirm')"), "uncertain send explanation");
+  assert.equal(await evaluate("document.querySelector('textarea').value"), "A second thought");
+  writeFileSync(join(out, "chat-unconfirmed.png"), (await window.webContents.capturePage()).toPNG());
+  await evaluate("document.querySelector('[aria-label=\"Collapse chat\"]').click()");
+  await until(() => window.getBounds().width === 216, "collapse before move");
   const position = window.getPosition();
   await evaluate("window.companion.nudge('ArrowLeft')");
   await until(() => window.getPosition()[0] !== position[0], "keyboard move");
@@ -130,7 +214,9 @@ async function run() {
   const selected = companion.appearance.id;
   await evaluate("document.querySelector('.companion-hide').click()");
   await until(() => !companion.enabled, "hide control");
-  assert.equal(pet(), undefined);
+  assert.equal(pet(), window);
+  assert.equal(window.isVisible(), false);
+  assert.equal(await evaluate("window.companion.getChat()"), null, "hidden companion refuses IPC");
   const pausedCalls = calls;
   await pause(350);
   assert.equal(calls, pausedCalls, "hidden pet stops polling");
@@ -139,6 +225,9 @@ async function run() {
   await until(() => window.webContents.executeJavaScript("!!document.querySelector('.companion-custom-art')").catch(() => false), "custom selection survives show");
   assert.deepEqual(window.getPosition(), [savedPosition.x, savedPosition.y]);
   assert.equal(companion.appearance.id, selected);
+  await evaluate("document.querySelector('.companion-character').click()");
+  await until(() => evaluate("!document.querySelector('.companion-chat').hidden"), "show retains chat");
+  assert.equal(await evaluate("document.querySelector('textarea').value"), "A second thought", "hide/show preserves unconfirmed send draft");
   window.close();
   await until(() => !companion.enabled, "native close keeps visibility preference honest");
   assert.equal(visibility.at(-1), false);
@@ -151,7 +240,7 @@ async function run() {
     app.once("will-quit", () => {
       assert.equal(JSON.parse(readFileSync(prefs, "utf8")).enabled, true, "ordinary Quit preserves companion visibility for next launch");
       assert.equal(BrowserWindow.getAllWindows().length, 0);
-      writeFileSync(join(out, "verification.json"), JSON.stringify({ passed: true, electron: process.versions.electron, captures: 19, checks: ["sandboxed renderer", "foreign sender rejection", "isolated zoom", "six real catalogue states", "three characters", "theme sync", "reduced motion", "chat click", "keyboard move and position persistence", "custom PNG import and fallback", "hide stops polling", "native close", "actual Electron quit preserves next-launch visibility"] }, null, 2));
+      writeFileSync(join(out, "verification.json"), JSON.stringify({ passed: true, electron: process.versions.electron, captures: 24, checks: ["sandboxed renderer", "foreign sender rejection", "isolated zoom", "six real catalogue states", "three characters", "theme sync", "reduced motion", "task click", "inline chat and real IPC", "draft survives collapse", "admitted send and durable reply", "ambiguous send preserves draft", "approval handoff", "expand exact conversation", "keyboard move and position persistence", "custom PNG import and fallback", "hide stops polling", "native close", "actual Electron quit preserves next-launch visibility"] }, null, 2));
       console.log("COMPANION_DRIVER_OK");
       resolveQuit();
     });

@@ -1,11 +1,12 @@
 import { cn } from "@shared/lib/utils";
 import { DEFAULT_THEME, applyThemeToDocument } from "@shared/themes";
 import type { ThemeName } from "@shared/themes";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { COMPANION_OFFLINE } from "../../shared/desktop-companion";
 import type {
 	CompanionBridge,
+	CompanionChatView,
 	CompanionState,
 } from "../../shared/desktop-companion";
 import "./assets/fonts/fonts.css";
@@ -13,6 +14,7 @@ import "./styles/themes.generated.css";
 import "./companion.css";
 import type { CompanionAppearance } from "../../shared/companion-skin";
 import { CompanionArt } from "./companion-art";
+import { CompanionChat } from "./companion-chat";
 
 declare global {
 	interface Window {
@@ -42,9 +44,29 @@ function Companion() {
 		name: "Sprout",
 	});
 	const [engaged, setEngaged] = useState(false);
+	const [chat, setChat] = useState<CompanionChatView>({
+		open: false,
+		snapshot: {
+			sessionId: null,
+			title: "Companion chat",
+			messages: [],
+			status: "idle",
+			error: null,
+			canSend: true,
+		},
+	});
+	const wasChatOpen = useRef(false);
+	useEffect(() => {
+		if (wasChatOpen.current && !chat.open)
+			document
+				.querySelector<HTMLButtonElement>(".companion-character")
+				?.focus({ preventScroll: true });
+		wasChatOpen.current = chat.open;
+	}, [chat.open]);
 	useEffect(() => {
 		let received = false;
 		let appearanceReceived = false;
+		let chatReceived = false;
 		let mounted = true;
 		const unsubscribe = window.companion.onState((next) => {
 			received = true;
@@ -60,9 +82,17 @@ function Companion() {
 		void window.companion.getAppearance().then((next) => {
 			if (mounted && !appearanceReceived && next) setAppearance(next);
 		});
+		const unwatchChat = window.companion.onChat((next) => {
+			chatReceived = true;
+			setChat(next);
+		});
+		void window.companion.getChat().then((next) => {
+			if (mounted && !chatReceived && next) setChat(next);
+		});
 		const hover = (event: PointerEvent) => {
 			window.companion.setInteractive(
-				event.target instanceof Element && !!event.target.closest("button"),
+				event.target instanceof Element &&
+					!!event.target.closest("button, .companion-chat"),
 			);
 		};
 		const leave = () => window.companion.setInteractive(false);
@@ -72,19 +102,27 @@ function Companion() {
 			mounted = false;
 			unsubscribe();
 			unwatchAppearance();
+			unwatchChat();
 			document.removeEventListener("pointermove", hover);
 			document.removeEventListener("pointerleave", leave);
 		};
 	}, []);
 
 	return (
-		<main className={cn("companion")} data-mood={state.mood}>
+		<main
+			className={cn("companion", chat.open && "companion--chat")}
+			data-mood={state.mood}
+		>
 			<div className={cn("companion-bubble")}>
 				<button
 					type="button"
 					className={cn("companion-status")}
-					onClick={() => window.companion.openChat()}
-					aria-label={`${state.label}. Open Local Operator chat`}
+					onClick={() =>
+						state.sessionId
+							? window.companion.openTask()
+							: window.companion.openChat()
+					}
+					aria-label={`${state.label}. ${state.sessionId ? "Open task in Local Operator" : "Chat with companion"}`}
 				>
 					<span className={cn("companion-status-mark")} aria-hidden="true">
 						{state.mood === "complete"
@@ -136,7 +174,10 @@ function Companion() {
 					if (event.detail === 0) window.companion.openChat();
 				}}
 				onKeyDown={(event) => {
-					if (event.key === "Escape") window.companion.hide();
+					if (event.key === "Escape") {
+						if (chat.open) window.companion.collapseChat();
+						else window.companion.hide();
+					}
 					if (
 						event.key === "ArrowLeft" ||
 						event.key === "ArrowRight" ||
@@ -173,6 +214,14 @@ function Companion() {
 			<span className={cn("companion-hint")} aria-hidden="true">
 				Click to chat · Drag to move
 			</span>
+			<CompanionChat
+				snapshot={chat.snapshot}
+				open={chat.open}
+				onSend={(text) => window.companion.sendMessage(text)}
+				onNewChat={() => window.companion.newChat()}
+				onCollapse={() => window.companion.collapseChat()}
+				onExpand={() => window.companion.expandChat()}
+			/>
 		</main>
 	);
 }

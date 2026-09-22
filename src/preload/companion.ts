@@ -2,10 +2,25 @@ import { contextBridge, ipcRenderer } from "electron";
 import type { CompanionAppearance } from "../shared/companion-skin";
 import type {
 	CompanionBridge,
+	CompanionChatView,
 	CompanionState,
 } from "../shared/desktop-companion";
 
 const companion: CompanionBridge = {
+	getChat: () => ipcRenderer.invoke("companion:get-chat"),
+	onChat: (listener) => {
+		const receive = (
+			_event: Electron.IpcRendererEvent,
+			view: CompanionChatView,
+		) => listener(view);
+		ipcRenderer.on("companion:chat", receive);
+		return () => ipcRenderer.removeListener("companion:chat", receive);
+	},
+	sendMessage: (text) => ipcRenderer.invoke("companion:send", text),
+	newChat: () => ipcRenderer.send("companion:action", "new-chat"),
+	collapseChat: () => ipcRenderer.send("companion:action", "collapse-chat"),
+	expandChat: () => ipcRenderer.send("companion:action", "expand-chat"),
+	openTask: () => ipcRenderer.send("companion:action", "open-task"),
 	getAppearance: () => ipcRenderer.invoke("companion:get-appearance"),
 	onAppearance: (listener) => {
 		const receive = (
