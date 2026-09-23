@@ -1,0 +1,304 @@
+.companion-sprite {
+	position: absolute;
+	inset: 0;
+	overflow: hidden;
+	opacity: 0;
+	pointer-events: none;
+}
+
+.companion-sprite[data-ready] {
+	opacity: 1;
+}
+
+.companion-sprite-frame {
+	display: block;
+	width: 100%;
+	height: 100%;
+	overflow: hidden;
+}
+
+.companion-sprite-sheet {
+	display: block;
+	width: 400%;
+	height: 200%;
+	max-width: none;
+}
+
+.companion-art-pixel .companion-sprite-sheet {
+	image-rendering: pixelated;
+}
+
+.companion-art:has(.companion-sprite[data-ready]) .companion-art-visual {
+	opacity: 0;
+	animation: none;
+}
+
+.companion-art:has(.companion-sprite[data-ready]) .companion-art-pose {
+	transform: none;
+	animation: none;
+}
+
+.companion-sprite[data-action="peekaboo"] {
+	--sprite-duration: 4800ms;
+}
+
+.companion-sprite[data-action="playful"] {
+	--sprite-duration: 4000ms;
+}
+
+.companion-sprite[data-action="waking"] {
+	--sprite-duration: 800ms;
+}
+
+.companion-sprite[data-ready]:is(
+		[data-action="peekaboo"],
+		[data-action="playful"]
+	)
+	.companion-sprite-sheet {
+	animation: companion-sprite-play var(--sprite-duration) steps(1, end) forwards;
+}
+
+.companion-art:has(.companion-sprite[data-ready]:not([data-action="dozing"]))
+	.companion-art-visual {
+	animation: companion-sprite-underlay var(--sprite-duration) linear both;
+}
+
+.companion-art:has(.companion-sprite[data-action="peekaboo"]) {
+	--sprite-duration: 4800ms;
+}
+
+.companion-art:has(.companion-sprite[data-action="playful"]) {
+	--sprite-duration: 4000ms;
+}
+
+.companion-art:has(.companion-sprite[data-action="waking"]) {
+	--sprite-duration: 800ms;
+}
+
+.companion-sprite[data-ready]:not([data-action="dozing"]) {
+	animation: companion-sprite-overlay var(--sprite-duration) linear both;
+}
+
+.companion-sprite[data-ready][data-action="dozing"] .companion-sprite-sheet {
+	animation: companion-sprite-settle 900ms steps(1, end) forwards,
+		companion-sprite-sleep 7600ms steps(1, end) 900ms infinite;
+}
+
+.companion-sprite[data-ready][data-action="waking"] .companion-sprite-sheet {
+	animation: companion-sprite-wake 800ms steps(1, end) forwards;
+}
+
+.companion-sprite[data-ready]:is(
+		[data-action="peekaboo"],
+		[data-action="playful"]
+	)
+	.companion-sprite-frame {
+	animation: companion-sprite-register-play var(--sprite-duration) steps(1, end)
+		forwards;
+}
+.companion-sprite[data-ready][data-action="dozing"] .companion-sprite-frame {
+	animation: companion-sprite-register-settle 900ms steps(1, end) forwards,
+		companion-sprite-register-sleep 7600ms steps(1, end) 900ms infinite;
+}
+.companion-sprite[data-ready][data-action="waking"] .companion-sprite-frame {
+	animation: companion-sprite-register-wake 800ms steps(1, end) forwards;
+}
+@keyframes companion-sprite-register-play {
+	0% {
+		transform: var(--sprite-offset-0);
+	}
+	12% {
+		transform: var(--sprite-offset-1);
+	}
+	24% {
+		transform: var(--sprite-offset-2);
+	}
+	36% {
+		transform: var(--sprite-offset-3);
+	}
+	54% {
+		transform: var(--sprite-offset-4);
+	}
+	66% {
+		transform: var(--sprite-offset-5);
+	}
+	78% {
+		transform: var(--sprite-offset-6);
+	}
+	90%,
+	100% {
+		transform: var(--sprite-offset-7);
+	}
+}
+@keyframes companion-sprite-register-settle {
+	0% {
+		transform: var(--sprite-offset-0);
+	}
+	25% {
+		transform: var(--sprite-offset-1);
+	}
+	55% {
+		transform: var(--sprite-offset-2);
+	}
+	85%,
+	100% {
+		transform: var(--sprite-offset-3);
+	}
+}
+@keyframes companion-sprite-register-sleep {
+	0%,
+	100% {
+		transform: var(--sprite-offset-3);
+	}
+	50% {
+		transform: var(--sprite-offset-4);
+	}
+}
+@keyframes companion-sprite-register-wake {
+	0% {
+		transform: var(--sprite-offset-3);
+	}
+	20% {
+		transform: var(--sprite-offset-4);
+	}
+	40% {
+		transform: var(--sprite-offset-5);
+	}
+	65% {
+		transform: var(--sprite-offset-6);
+	}
+	85%,
+	100% {
+		transform: var(--sprite-offset-7);
+	}
+}
+
+@keyframes companion-sprite-play {
+	0% {
+		transform: translate(0, 0);
+	}
+	12% {
+		transform: translate(-25%, 0);
+	}
+	24% {
+		transform: translate(-50%, 0);
+	}
+	36% {
+		transform: translate(-75%, 0);
+	}
+	54% {
+		transform: translate(0, -50%);
+	}
+	66% {
+		transform: translate(-25%, -50%);
+	}
+	78% {
+		transform: translate(-50%, -50%);
+	}
+	90%,
+	100% {
+		transform: translate(-75%, -50%);
+	}
+}
+
+@keyframes companion-sprite-settle {
+	0% {
+		transform: translate(0, 0);
+	}
+	25% {
+		transform: translate(-25%, 0);
+	}
+	55% {
+		transform: translate(-50%, 0);
+	}
+	85%,
+	100% {
+		transform: translate(-75%, 0);
+	}
+}
+
+@keyframes companion-sprite-sleep {
+	0%,
+	100% {
+		transform: translate(-75%, 0);
+	}
+	50% {
+		transform: translate(0, -50%);
+	}
+}
+
+@keyframes companion-sprite-wake {
+	0% {
+		transform: translate(-75%, 0);
+	}
+	20% {
+		transform: translate(0, -50%);
+	}
+	40% {
+		transform: translate(-25%, -50%);
+	}
+	65% {
+		transform: translate(-50%, -50%);
+	}
+	85%,
+	100% {
+		transform: translate(-75%, -50%);
+	}
+}
+
+@keyframes companion-sprite-overlay {
+	0%,
+	100% {
+		opacity: 0;
+	}
+	5%,
+	93% {
+		opacity: 1;
+	}
+}
+
+@keyframes companion-sprite-underlay {
+	0%,
+	100% {
+		opacity: 1;
+	}
+	5%,
+	93% {
+		opacity: 0;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.companion-art[data-expression][data-reaction]:has(
+			.companion-sprite[data-ready]
+		)
+		.companion-art-pose {
+		transform: none;
+	}
+	.companion-art[data-expression][data-reaction]:has(
+			.companion-sprite[data-ready]
+		)
+		:is(
+			.companion-art-visual,
+			.companion-art-pose,
+			.companion-sprite,
+			.companion-sprite-sheet,
+			.companion-sprite-frame
+		) {
+		animation: none;
+		transition: none;
+	}
+	.companion-sprite[data-ready]:not([data-action="dozing"]) {
+		display: none;
+	}
+	.companion-art:has(.companion-sprite[data-ready]:not([data-action="dozing"]))
+		.companion-art-visual {
+		opacity: 1;
+	}
+	.companion-sprite[data-action="dozing"] .companion-sprite-frame {
+		transform: var(--sprite-offset-3);
+	}
+	.companion-sprite[data-action="dozing"] .companion-sprite-sheet {
+		transform: translate(-75%, 0);
+	}
+}

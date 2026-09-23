@@ -14,7 +14,9 @@ type DelightReaction =
 	| "stretching"
 	| "yawning"
 	| "daydream"
-	| "starstruck";
+	| "starstruck"
+	| "peekaboo"
+	| "playful";
 
 export function useCompanionInteraction(
 	mood: CompanionMood = "idle",
@@ -49,6 +51,7 @@ export function useCompanionInteraction(
 	const taps = useRef({ count: 0, started: 0 });
 	const attention = useRef({ hovered: false, focused: false });
 	const ambient = useRef(false);
+	const nextScene = useRef(0);
 	const reducedMotion = useRef(false);
 	const sleeping = useRef(false);
 	const chatVisible = useRef(chatOpen);
@@ -71,7 +74,9 @@ export function useCompanionInteraction(
 			ambient.current =
 				reaction === "stretching" ||
 				reaction === "yawning" ||
-				reaction === "daydream";
+				reaction === "daydream" ||
+				reaction === "peekaboo" ||
+				reaction === "playful";
 			setDelight(reaction);
 			timers.current.reaction = window.setTimeout(() => {
 				timers.current.reaction = 0;
@@ -100,43 +105,60 @@ export function useCompanionInteraction(
 				!chatVisible.current &&
 				!document.hidden;
 			if (!canRest()) return;
-			const dozeAt = window.performance.now() + 90_000;
-			const doze = () => {
-				timers.current.idle = 0;
-				if (canRest() && !origin.current) {
-					sleeping.current = true;
-					setDozing(true);
-				}
-			};
-			if (reducedMotion.current) {
-				timers.current.idle = window.setTimeout(doze, 90_000);
-				return;
-			}
-			timers.current.idle = window.setTimeout(() => {
-				timers.current.idle = 0;
-				if (!canRest()) return;
-				if (
-					!origin.current &&
-					!attention.current.hovered &&
-					!attention.current.focused &&
-					!reducedMotion.current &&
-					dozeAt - window.performance.now() >= 2600
-				) {
-					const hour = new Date().getHours();
-					play(
-						hour >= 5 && hour <= 10
-							? "stretching"
-							: hour >= 11 && hour <= 20
-								? "daydream"
-								: "yawning",
-						2600,
-					);
-				}
+			const started = window.performance.now();
+			const dozeAt = started + 90_000;
+			const opportunities = [14_000, 36_000, 59_000, 80_000];
+			const schedule = () => {
+				const now = window.performance.now();
+				const next = reducedMotion.current
+					? undefined
+					: opportunities.find((at) => started + at > now);
 				timers.current.idle = window.setTimeout(
-					doze,
-					Math.max(0, dozeAt - window.performance.now()),
+					() => {
+						timers.current.idle = 0;
+						if (!canRest()) return;
+						const remaining = dozeAt - window.performance.now();
+						if (remaining <= 0) {
+							if (!origin.current) {
+								sleeping.current = true;
+								setDozing(true);
+							}
+							return;
+						}
+						const scene = nextScene.current % 4;
+						const duration = scene === 0 ? 4800 : scene === 1 ? 4000 : 2600;
+						if (
+							!origin.current &&
+							!attention.current.hovered &&
+							!attention.current.focused &&
+							!reducedMotion.current &&
+							remaining >= duration
+						) {
+							const hour = new Date().getHours();
+							const timeOfDay =
+								hour >= 5 && hour <= 10
+									? "stretching"
+									: hour >= 11 && hour <= 20
+										? "daydream"
+										: "yawning";
+							play(
+								scene === 0
+									? "peekaboo"
+									: scene === 1
+										? "playful"
+										: scene === 2
+											? timeOfDay
+											: "daydream",
+								duration,
+							);
+							nextScene.current++;
+						}
+						schedule();
+					},
+					Math.max(0, (next === undefined ? dozeAt : started + next) - now),
 				);
-			}, 35_000);
+			};
+			schedule();
 		},
 		[cancelAmbient, clear, play],
 	);

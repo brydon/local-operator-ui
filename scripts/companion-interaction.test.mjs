@@ -286,7 +286,7 @@ test("chat keeps the companion awake; waking yields immediately to a new grab", 
 	});
 });
 
-test("one time-of-day gesture leaves the original ninety-second sleep deadline intact", async () => {
+test("idle scenes rotate before the time-of-day gesture and keep the sleep deadline", async () => {
 	for (const [time, reaction] of [
 		[5, "stretching"],
 		[10, "stretching"],
@@ -297,15 +297,25 @@ test("one time-of-day gesture leaves the original ninety-second sleep deadline i
 	]) {
 		await fixture(async ({ button, advance, hour }) => {
 			hour(time);
-			await advance(34_999);
+			await advance(13_999);
 			assert.equal(button.dataset.reaction, "rest");
 			await advance(1);
+			assert.equal(button.dataset.reaction, "peekaboo");
+			await advance(4800);
+			assert.equal(button.dataset.reaction, "rest");
+			await advance(17_200);
+			assert.equal(button.dataset.reaction, "playful");
+			await advance(4000);
+			assert.equal(button.dataset.reaction, "rest");
+			await advance(19_000);
 			assert.equal(button.dataset.reaction, reaction);
 			assert.equal(timers.size, 2);
 			await advance(2600);
 			assert.equal(button.dataset.reaction, "rest");
 			assert.equal(timers.size, 1);
-			await advance(52_399);
+			await advance(18_400);
+			assert.equal(button.dataset.reaction, "daydream");
+			await advance(9_999);
 			assert.equal(button.dataset.reaction, "rest");
 			await advance(1);
 			assert.equal(button.dataset.reaction, "dozing");
@@ -337,12 +347,12 @@ test("ambient gestures yield to attention, task changes, chat, hiding and reduce
 		(f) => f.reduceMotion(true),
 	]) {
 		await fixture(async (f) => {
-			await f.advance(35_000);
-			assert.equal(f.button.dataset.reaction, "daydream");
+			await f.advance(14_000);
+			assert.equal(f.button.dataset.reaction, "peekaboo");
 			await interrupt(f);
-			assert.notEqual(f.button.dataset.reaction, "daydream");
-			await f.advance(2600);
-			assert.notEqual(f.button.dataset.reaction, "daydream");
+			assert.notEqual(f.button.dataset.reaction, "peekaboo");
+			await f.advance(4800);
+			assert.notEqual(f.button.dataset.reaction, "peekaboo");
 		});
 	}
 	for (const engage of [
@@ -353,11 +363,25 @@ test("ambient gestures yield to attention, task changes, chat, hiding and reduce
 	]) {
 		await fixture(async (f) => {
 			await engage(f);
-			await f.advance(35_000);
-			assert.notEqual(f.button.dataset.reaction, "daydream");
+			await f.advance(14_000);
+			assert.notEqual(f.button.dataset.reaction, "peekaboo");
 		});
 	}
 	assert.equal(timers.size, 0);
+});
+
+test("interrupting an idle scene advances to a different game next time", async () => {
+	await fixture(async ({ button, advance, event }) => {
+		await advance(14_000);
+		assert.equal(button.dataset.reaction, "peekaboo");
+		await event("pointerover");
+		await event("pointerout");
+		await advance(14_000);
+		assert.equal(button.dataset.reaction, "playful");
+		await event("pointerover");
+		await advance(36_000);
+		assert.equal(button.dataset.reaction, "curious");
+	});
 });
 
 test("a rare reward needs four recent accepted loves and respects its cooldown", async () => {

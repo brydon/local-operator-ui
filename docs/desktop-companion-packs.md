@@ -10,7 +10,7 @@ When a task needs attention, the alert button opens that task directly.
 Brush back and forth over their head or tap a few times for a little heart reaction.
 Pick them up to see them dangle and wriggle; releasing gives them a short fall and
 a soft landing. All companions sleep after 90 quiet seconds, including after completed
-tasks, and wake when you interact. They stay awake while chat is open. After a quiet moment, morning brings a stretch, daytime
+tasks, and wake when you interact. They stay awake while chat is open. Quiet moments bring games of peekaboo, little dances, and a full curl-up at bedtime. Morning brings a stretch, daytime
 brings a character-specific diversion, and late night brings a yawn. A little extra
 affection can reveal a surprise. These use your local clock and pause for interaction
 or work. Reduced motion skips idle antics, keeps reactions still, and disables the drop.
@@ -46,6 +46,6 @@ characters can be imported. The app copies the files; import an edited pack agai
 to update it. Custom images react to pressing and dragging, but only built-in
 characters have separate animated eyes.
 
-The bundled Sprout, Hoodie, and Pixel artwork, including Hoodie's motion sheet, was generated with Codex image
+The bundled Sprout, Hoodie, and Pixel artwork, including their peekaboo, play, and nap sheets and Hoodie's pickup sheet, was generated with Codex image
 generation on 2026-09-22. Their colors and ambient motion are part of the artwork;
 controls use the app theme. Reduced motion disables movement and blinking.

@@ -5,6 +5,10 @@ import hoodieMotion from "./assets/companions/hoodie-motion.png";
 import hoodie from "./assets/companions/hoodie.png";
 import pixel from "./assets/companions/pixel.png";
 import sprout from "./assets/companions/sprout.png";
+import {
+	CompanionSprite,
+	type CompanionSpriteAction,
+} from "./companion-sprites";
 import "./companion-art.css";
 
 export type BuiltinCompanionCharacter = "sprout" | "hoodie" | "pixel";
@@ -25,7 +29,9 @@ export type CompanionReaction =
 	| "stretching"
 	| "yawning"
 	| "daydream"
-	| "starstruck";
+	| "starstruck"
+	| "peekaboo"
+	| "playful";
 
 const artwork: Record<BuiltinCompanionCharacter, string> = {
 	sprout,
@@ -546,6 +552,9 @@ export function CompanionArt({
 		expressionMood === "idle" &&
 		["stretching", "yawning", "daydream"].includes(reaction);
 	const sleeping = expressionMood === "idle" && reaction === "dozing";
+	const sprite =
+		expressionMood === "idle" &&
+		["peekaboo", "playful", "dozing", "waking"].includes(reaction);
 	const face = useFaceAnimation(lively, character);
 	const interacting = reaction !== "rest" && reaction !== "dozing" && !vignette;
 	const x = reaction === "listening" ? -0.55 : interacting ? gaze.x : 0;
@@ -657,6 +666,13 @@ export function CompanionArt({
 						<path d="M17 36v8m-4-4h8M83 25v6m-3-3h6" />
 					</svg>
 				</span>
+				{sprite && (
+					<CompanionSprite
+						key={`${character}-${reaction}`}
+						character={character}
+						action={reaction as CompanionSpriteAction}
+					/>
+				)}
 			</span>
 			{vignette && reaction === "daydream" && character === "sprout" && (
 				<svg

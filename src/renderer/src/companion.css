@@ -138,6 +138,44 @@ body {
 		transform: rotate(4deg);
 	}
 }
+.companion-character[data-reaction="peekaboo"] .companion-custom-art {
+	animation: companion-custom-peekaboo 4800ms ease-in-out;
+}
+.companion-character[data-reaction="playful"] .companion-custom-art {
+	animation: companion-custom-play 4000ms ease-in-out;
+}
+@keyframes companion-custom-peekaboo {
+	0%,
+	100% {
+		transform: none;
+	}
+	25%,
+	45% {
+		transform: translateY(105%) rotate(-8deg);
+	}
+	58%,
+	66% {
+		transform: translateY(65%) rotate(12deg);
+	}
+	80% {
+		transform: translateY(-4%) rotate(-4deg);
+	}
+}
+@keyframes companion-custom-play {
+	0%,
+	100% {
+		transform: none;
+	}
+	18%,
+	55% {
+		transform: translateY(-8%) rotate(-8deg);
+	}
+	35%,
+	72% {
+		transform: translateY(2%) rotate(8deg) scale(1.04, 0.94);
+	}
+}
+
 @media (prefers-reduced-motion: reduce) {
 	.companion-chat:not([hidden]) {
 		animation: none;
