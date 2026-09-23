@@ -1,11 +1,30 @@
 .companion-art {
 	--companion-art-light: #c8fbd7;
+	--companion-art-breath: 4.8s;
+	--companion-art-blink: 6.4s;
+	--companion-art-motion: cubic-bezier(0.22, 0.7, 0.3, 1);
 	display: block;
 	position: relative;
 	width: 100%;
 	height: 100%;
+	max-width: 110px;
+	max-height: 110px;
+	padding: 2px;
+	box-sizing: border-box;
+	overflow: clip;
 	pointer-events: none;
 	user-select: none;
+}
+
+.companion-art-hoodie {
+	--companion-art-breath: 5.4s;
+	--companion-art-blink: 7.2s;
+}
+
+.companion-art-pixel {
+	--companion-art-breath: 5.6s;
+	--companion-art-blink: 5.8s;
+	--companion-art-motion: steps(5, end);
 }
 
 .companion-art-pose,
@@ -18,25 +37,48 @@
 }
 
 .companion-art-pose {
-	transition: transform 120ms ease;
+	transition: transform 240ms var(--companion-art-motion);
 }
 
 .companion-art-visual {
-	animation: companion-art-breathe 4s ease-in-out infinite;
+	animation: companion-art-breathe var(--companion-art-breath)
+		var(--companion-art-motion) infinite;
+}
+
+.companion-art[data-mood="idle"][data-reaction="curious"] .companion-art-pose {
+	transform: translateY(-1px) rotate(var(--companion-art-tilt));
 }
 
 .companion-art[data-reaction="pressed"] .companion-art-pose {
-	transform: translateY(2px) scale(1.025, 0.975);
+	transform: translateY(2px) scale(1.045, 0.94);
+	transition-duration: 120ms;
 }
 
 .companion-art[data-reaction="dragging"] .companion-art-pose {
-	transform: rotate(var(--companion-art-lean)) scale(0.985, 1.015);
+	transform-origin: 50% 22%;
+	transform: translateY(2px) rotate(var(--companion-art-lean))
+		scale(0.97, 1.035);
 }
 
 .companion-art[data-reaction="pressed"] .companion-art-visual,
-.companion-art[data-reaction="dragging"] .companion-art-visual,
-.companion-art[data-mood][data-reaction="dragging"] .companion-art-eyes {
+.companion-art[data-reaction="dragging"] .companion-art-visual {
 	animation: none;
+}
+
+.companion-art[data-mood="idle"][data-reaction="happy"] .companion-art-pose {
+	animation: companion-art-boop 600ms var(--companion-art-motion);
+}
+
+.companion-art[data-reaction="landing"] .companion-art-pose {
+	animation: companion-art-land 520ms var(--companion-art-motion);
+}
+
+.companion-art[data-mood="idle"][data-reaction="dozing"] .companion-art-pose {
+	transform: translateY(2px) rotate(-2deg) scaleY(0.97);
+}
+
+.companion-art[data-mood="idle"][data-reaction="dozing"] .companion-art-visual {
+	animation-duration: 7.2s;
 }
 
 .companion-art-body {
@@ -94,15 +136,38 @@
 		var(--companion-art-gaze-x, 0px),
 		var(--companion-art-gaze-y, 0px)
 	);
-	transition: transform 120ms ease, color 120ms ease;
+	transition: transform 180ms cubic-bezier(0.2, 0.65, 0.3, 1);
 }
 
 .companion-art-eyes {
 	transform-origin: 50% 40%;
 }
 
-.companion-art[data-mood="idle"] .companion-art-eyes {
-	animation: companion-art-blink 6.4s ease-in-out infinite;
+.companion-art[data-mood="idle"][data-reaction="rest"] .companion-art-eyes,
+.companion-art[data-mood="idle"][data-reaction="curious"] .companion-art-eyes {
+	animation: companion-art-blink var(--companion-art-blink) ease-in-out infinite;
+}
+
+.companion-art-glints {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	color: var(--companion-art-light);
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 1.5;
+	stroke-linecap: round;
+	opacity: 0;
+}
+
+.companion-art[data-mood="complete"] .companion-art-visual {
+	animation: companion-art-boop 600ms var(--companion-art-motion);
+}
+
+.companion-art[data-mood="complete"] .companion-art-glints,
+.companion-art[data-mood="idle"][data-reaction="happy"] .companion-art-glints {
+	animation: companion-art-glint 700ms ease-out;
 }
 
 .companion-art-eye-fill,
@@ -138,7 +203,54 @@
 		transform: translateY(0);
 	}
 	50% {
-		transform: translateY(-2px);
+		transform: translateY(-1.5px) scaleY(1.01);
+	}
+}
+
+@keyframes companion-art-boop {
+	0% {
+		transform: translateY(2px) scale(1.045, 0.94);
+	}
+	32% {
+		transform: translateY(-4px) scale(0.975, 1.035) rotate(-2deg);
+	}
+	62% {
+		transform: translateY(1px) scale(1.025, 0.975) rotate(1deg);
+	}
+	100% {
+		transform: none;
+	}
+}
+
+@keyframes companion-art-land {
+	0% {
+		transform: translateY(2px) rotate(var(--companion-art-lean))
+			scale(0.97, 1.035);
+	}
+	26% {
+		transform: translateY(3px) scale(1.055, 0.93);
+	}
+	58% {
+		transform: translateY(-2px) scale(0.99, 1.02);
+	}
+	82% {
+		transform: translateY(1px) scale(1.01, 0.99);
+	}
+	100% {
+		transform: none;
+	}
+}
+
+@keyframes companion-art-glint {
+	0%,
+	100% {
+		opacity: 0;
+	}
+	25% {
+		opacity: 0.85;
+	}
+	100% {
+		transform: translateY(-3px);
 	}
 }
 
@@ -165,20 +277,22 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-	.companion-art-visual,
-	.companion-art-pose,
-	.companion-art[data-reaction] .companion-art-pose,
-	.companion-art[data-mood] .companion-art-visual,
-	.companion-art[data-mood] .companion-art-eyes,
-	.companion-art-progress rect {
+	.companion-art[data-mood][data-reaction]
+		:is(
+			.companion-art-pose,
+			.companion-art-visual,
+			.companion-art-eyes,
+			.companion-art-gaze,
+			.companion-art-progress rect,
+			.companion-art-glints
+		) {
 		animation: none;
 		transition: none;
 		transform: none;
 		opacity: 1;
 	}
 
-	.companion-art-gaze {
-		transition: none;
-		transform: none;
+	.companion-art-glints {
+		display: none;
 	}
 }

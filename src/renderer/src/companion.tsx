@@ -1,6 +1,8 @@
+import { Button } from "@shared/components/ui/button";
 import { cn } from "@shared/lib/utils";
 import { DEFAULT_THEME, applyThemeToDocument } from "@shared/themes";
 import type { ThemeName } from "@shared/themes";
+import { MessageCircle } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { COMPANION_OFFLINE } from "../../shared/desktop-companion";
@@ -74,7 +76,9 @@ function Companion() {
 		window.companion.getAppearance,
 		window.companion.onAppearance,
 	);
-	const interaction = useCompanionInteraction();
+	const interaction = useCompanionInteraction(state.mood);
+	const lastGesture = useRef<"tap" | "drag" | null>(null);
+	const firstClickWasTap = useRef(false);
 	const chat = useCompanionValue<CompanionChatView>(
 		{
 			open: false,
@@ -141,94 +145,122 @@ function Companion() {
 
 	return (
 		<main className={cn("companion")} data-mood={state.mood}>
-			<button
-				type="button"
-				className={cn("companion-character")}
-				{...interaction.handlers}
-				data-reaction={interaction.reaction}
-				aria-label={`${appearance.name}. ${state.label}. Click to chat. Drag or use arrow keys to move. Right-click for options.`}
-				title={`${state.label} · Click to chat · Right-click for options`}
-				onContextMenu={(event) => {
-					event.preventDefault();
-					interaction.reset();
-					window.companion.showMenu();
-				}}
-				onPointerDown={(event) => {
-					if (event.button !== 0 || event.ctrlKey || event.isPrimary === false)
-						return;
-					interaction.handlers.onPointerDown(event);
-					event.currentTarget.setPointerCapture(event.pointerId);
-					window.companion.drag("start");
-				}}
-				onPointerMove={(event) => {
-					interaction.handlers.onPointerMove(event);
-					if (event.currentTarget.hasPointerCapture(event.pointerId))
-						window.companion.drag("move");
-				}}
-				onPointerUp={(event) => {
-					interaction.handlers.onPointerUp();
-					if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
-					window.companion.drag("end");
-					event.currentTarget.releasePointerCapture(event.pointerId);
-				}}
-				onPointerCancel={() => {
-					interaction.handlers.onPointerCancel();
-					window.companion.drag("cancel");
-				}}
-				onLostPointerCapture={() => {
-					interaction.handlers.onLostPointerCapture();
-					window.companion.drag("cancel");
-				}}
-				onClick={(event) => {
-					if (event.detail === 0) window.companion.openChat();
-				}}
-				onKeyDown={(event) => {
-					if (
-						event.key === "ContextMenu" ||
-						(event.shiftKey && event.key === "F10")
-					) {
+			<div className={cn("companion-pet")} data-engaged={interaction.isEngaged}>
+				<button
+					type="button"
+					className={cn("companion-character")}
+					{...interaction.handlers}
+					data-reaction={interaction.reaction}
+					aria-label={`${appearance.name}. ${state.label}. Click to pet. Double-click to chat. Drag or use arrow keys to move. Right-click for options.`}
+					title={`${state.label} · Click to pet · Double-click to chat`}
+					onContextMenu={(event) => {
 						event.preventDefault();
 						interaction.reset();
+						lastGesture.current = null;
+						firstClickWasTap.current = false;
 						window.companion.showMenu();
-					}
-					if (event.key === "Escape") {
-						if (chat.open) window.companion.collapseChat();
-						else window.companion.hide();
-					}
-					if (
-						event.key === "ArrowLeft" ||
-						event.key === "ArrowRight" ||
-						event.key === "ArrowUp" ||
-						event.key === "ArrowDown"
-					) {
-						event.preventDefault();
-						window.companion.nudge(event.key);
-					}
-				}}
-			>
-				{appearance.frames ? (
-					<img
-						className={cn(
-							"companion-custom-art",
-							appearance.pixelated && "companion-custom-pixel",
-						)}
-						src={appearance.frames[state.mood] ?? appearance.frames.idle}
-						alt=""
-						draggable={false}
-					/>
-				) : (
-					<CompanionArt
-						character={
-							appearance.id === "hoodie" || appearance.id === "pixel"
-								? appearance.id
-								: "sprout"
+					}}
+					onPointerDown={(event) => {
+						if (
+							event.button !== 0 ||
+							event.ctrlKey ||
+							event.isPrimary === false
+						)
+							return;
+						interaction.handlers.onPointerDown(event);
+						event.currentTarget.setPointerCapture(event.pointerId);
+						window.companion.drag("start");
+					}}
+					onPointerMove={(event) => {
+						interaction.handlers.onPointerMove(event);
+						if (event.currentTarget.hasPointerCapture(event.pointerId))
+							window.companion.drag("move");
+					}}
+					onPointerUp={(event) => {
+						lastGesture.current = interaction.handlers.onPointerUp(event);
+						if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
+						window.companion.drag("end");
+						event.currentTarget.releasePointerCapture(event.pointerId);
+					}}
+					onPointerCancel={() => {
+						interaction.handlers.onPointerCancel();
+						window.companion.drag("cancel");
+					}}
+					onLostPointerCapture={() => {
+						interaction.handlers.onLostPointerCapture();
+						window.companion.drag("cancel");
+					}}
+					onClick={(event) => {
+						if (event.detail === 0) interaction.tap();
+						else if (event.detail === 1)
+							firstClickWasTap.current = lastGesture.current === "tap";
+					}}
+					onDoubleClick={() => {
+						if (firstClickWasTap.current && lastGesture.current === "tap")
+							window.companion.openChat();
+						firstClickWasTap.current = false;
+					}}
+					onKeyDown={(event) => {
+						if (
+							event.key === "ContextMenu" ||
+							(event.shiftKey && event.key === "F10")
+						) {
+							event.preventDefault();
+							interaction.reset();
+							window.companion.showMenu();
 						}
-						mood={state.mood}
-						gaze={interaction.gaze}
-						reaction={interaction.reaction}
-					/>
-				)}
-			</button>
+						if (event.key === "Escape") {
+							event.preventDefault();
+							interaction.reset();
+							if (chat.open) window.companion.collapseChat();
+						}
+						if (
+							event.key === "ArrowLeft" ||
+							event.key === "ArrowRight" ||
+							event.key === "ArrowUp" ||
+							event.key === "ArrowDown"
+						) {
+							event.preventDefault();
+							window.companion.nudge(event.key);
+						}
+					}}
+				>
+					{appearance.frames ? (
+						<img
+							className={cn(
+								"companion-custom-art",
+								appearance.pixelated && "companion-custom-pixel",
+							)}
+							src={appearance.frames[state.mood] ?? appearance.frames.idle}
+							alt=""
+							draggable={false}
+						/>
+					) : (
+						<CompanionArt
+							character={
+								appearance.id === "hoodie" || appearance.id === "pixel"
+									? appearance.id
+									: "sprout"
+							}
+							mood={state.mood}
+							gaze={interaction.gaze}
+							reaction={interaction.reaction}
+						/>
+					)}
+				</button>
+				<Button
+					type="button"
+					variant="secondary"
+					size="icon-sm"
+					className={cn("companion-chat-toggle rounded-full")}
+					hidden={chat.open}
+					aria-label={`Chat with ${appearance.name}`}
+					title="Chat"
+					onClick={() => window.companion.openChat()}
+				>
+					<MessageCircle aria-hidden="true" />
+				</Button>
+			</div>
 			<CompanionChat
 				snapshot={chat.snapshot}
 				open={chat.open}

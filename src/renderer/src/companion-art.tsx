@@ -7,7 +7,14 @@ import sprout from "./assets/companions/sprout.png";
 import "./companion-art.css";
 
 export type BuiltinCompanionCharacter = "sprout" | "hoodie" | "pixel";
-export type CompanionReaction = "rest" | "curious" | "pressed" | "dragging";
+export type CompanionReaction =
+	| "rest"
+	| "curious"
+	| "pressed"
+	| "dragging"
+	| "happy"
+	| "landing"
+	| "dozing";
 
 const artwork: Record<BuiltinCompanionCharacter, string> = {
 	sprout,
@@ -48,12 +55,43 @@ const eyeRects = {
 
 function Eyes({ mood, pixels, reaction }: ExpressionProps) {
 	const expression = mood === "idle" ? reaction : mood;
+	if (expression === "happy") {
+		return (
+			<>
+				<rect
+					className={cn("companion-art-eye-fill")}
+					x="19"
+					y="16"
+					width="16"
+					height="25"
+					rx={pixels ? 0 : 8}
+				/>
+				<path d={pixels ? "M63 31v-6h5v-4h10v4h5v6" : "M63 31q10-17 20 0"} />
+			</>
+		);
+	}
+	if (expression === "dozing") {
+		return (
+			<path
+				d={pixels ? "M19 31h16m30 0h16" : "M19 30q8 5 16 0m30 0q8 5 16 0"}
+			/>
+		);
+	}
 	if (
 		expression === "offline" ||
 		expression === "complete" ||
-		expression === "pressed"
+		expression === "pressed" ||
+		expression === "landing"
 	) {
-		return <path d={eyePaths[expression][pixels ? 1 : 0]} />;
+		return (
+			<path
+				d={
+					eyePaths[expression === "landing" ? "pressed" : expression][
+						pixels ? 1 : 0
+					]
+				}
+			/>
+		);
 	}
 	if (mood === "error") {
 		return (
@@ -105,7 +143,8 @@ function Mouth({ mood, pixels, reaction }: ExpressionProps) {
 		return <path d={pixels ? "M40 58v-5h20v5" : "M40 58q10-10 20 0"} />;
 	}
 	if (mood === "idle") {
-		if (reaction === "pressed") {
+		if (reaction === "dozing") return <path d="M46 53h8" />;
+		if (reaction === "pressed" || reaction === "landing") {
 			return <path d={pixels ? "M42 50v5h16v-5" : "M40 49q10 10 20 0"} />;
 		}
 		if (reaction === "dragging") {
@@ -116,7 +155,7 @@ function Mouth({ mood, pixels, reaction }: ExpressionProps) {
 				/>
 			);
 		}
-		if (reaction === "curious") {
+		if (reaction === "curious" || reaction === "happy") {
 			return (
 				<path d={pixels ? "M34 47v8h7v5h18v-5h7v-8" : "M34 47q16 25 32 0"} />
 			);
@@ -132,13 +171,14 @@ export function CompanionArt({
 	reaction,
 }: CompanionArtProps) {
 	const pixels = character === "pixel";
-	const interacting = reaction !== "rest";
+	const interacting = reaction !== "rest" && reaction !== "dozing";
 	const x = interacting ? gaze.x : 0;
 	const y = interacting ? gaze.y : 0;
 	const tracking = {
 		"--companion-art-gaze-x": `${x * 7}px`,
 		"--companion-art-gaze-y": `${y * 4}px`,
-		"--companion-art-lean": `${x * 4}deg`,
+		"--companion-art-tilt": `${x * 2 + 1.5}deg`,
+		"--companion-art-lean": `${x * 6}deg`,
 	} as CSSProperties;
 	return (
 		<span
@@ -172,6 +212,14 @@ export function CompanionArt({
 								<Mouth mood={mood} pixels={pixels} reaction={reaction} />
 							</g>
 						</g>
+					</svg>
+					<svg
+						aria-hidden="true"
+						className={cn("companion-art-glints")}
+						viewBox="0 0 100 100"
+						focusable="false"
+					>
+						<path d="M17 36v8m-4-4h8M83 25v6m-3-3h6" />
 					</svg>
 				</span>
 			</span>

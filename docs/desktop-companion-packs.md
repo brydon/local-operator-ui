@@ -1,7 +1,8 @@
 # Desktop companion
 
-Click the pet to chat using your default model. Enter sends; Shift+Enter adds a
-line. Escape collapses the input; drafts survive collapsing and hiding, but not
+Click the pet to say hi; double-click or use its chat button to talk with your
+default model. Drag to move it, or use the arrow keys while it has focus. In chat,
+Enter sends; Shift+Enter adds a line. Escape collapses the input; drafts survive collapsing and hiding, but not
 quitting. Use **Open app** for approvals, attachments, model selection, or history.
 Right-click for character choices, Hide, and Open task in app.
 

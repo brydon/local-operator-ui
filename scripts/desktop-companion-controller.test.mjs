@@ -383,7 +383,7 @@ test("catalogue reads coalesce and serialize, then reject responses from a disab
 	assert.equal(f.state().sessionId, null);
 });
 
-test("dragging moves and saves without opening chat; clicking opens inline chat", async (t) => {
+test("dragging moves and saves; clicks and small jitters never open chat", async (t) => {
 	const f = fixture(t);
 	await f.catalogue("busy");
 	const window = f.windows[0];
@@ -398,8 +398,11 @@ test("dragging moves and saves without opening chat; clicking opens inline chat"
 	assert.deepEqual(f.preferences().position, { x: x - 40, y: y - 50 });
 	assert.equal(f.chat().open, false);
 	f.action("drag", "start");
+	f.cursor({ x: 363, y: 352 });
+	f.action("drag", "move");
 	f.action("drag", "end");
-	assert.equal(f.chat().open, true);
+	assert.equal(f.chat().open, false);
+	assert.deepEqual(window.position, [x - 40, y - 50]);
 	assert.deepEqual(f.desktopRequests, []);
 	f.action("collapse-chat");
 	f.action("drag", "start");

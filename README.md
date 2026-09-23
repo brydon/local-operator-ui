@@ -48,7 +48,8 @@ The Local Operator UI is a user interface for managing and interacting with the 
 ## Desktop companion
 
 Use **View > Desktop companion** to show a floating character that follows task
-progress. Click to chat, drag to move, or right-click to hide or change characters.
+progress. Click to pet, use the chat button to talk, drag to move, or right-click
+to hide or change characters.
 Choose Sprout, Hoodie, Pixel, or [add your own character](docs/desktop-companion-packs.md).
 
 ## 🚀 Getting Started

@@ -7,6 +7,7 @@ import {
 } from "../shared/companion-skin";
 import {
 	COMPANION_CHAT_SIZE,
+	COMPANION_DRAG_THRESHOLD,
 	COMPANION_OFFLINE,
 	COMPANION_SIZE,
 	type CompanionPreferences,
@@ -337,12 +338,11 @@ export class DesktopCompanion {
 		this.layoutChat(this.chatOpen);
 	}
 
-	private finishDrag(openChat = false): void {
+	private finishDrag(): void {
 		const drag = this.dragOrigin;
 		this.dragOrigin = null;
 		if (!drag) return;
-		if (openChat && !drag.moved) this.showChat();
-		else if (this.chatOpen) this.layoutChat(true);
+		if (this.chatOpen) this.layoutChat(true);
 	}
 
 	private showMenu(): void {
@@ -417,7 +417,8 @@ export class DesktopCompanion {
 				const cursor = screen.getCursorScreenPoint();
 				const dx = cursor.x - this.dragOrigin.cursor.x;
 				const dy = cursor.y - this.dragOrigin.cursor.y;
-				if (Math.hypot(dx, dy) > 4) this.dragOrigin.moved = true;
+				if (Math.hypot(dx, dy) > COMPANION_DRAG_THRESHOLD)
+					this.dragOrigin.moved = true;
 				if (this.dragOrigin.moved)
 					this.move({
 						x: this.dragOrigin.position.x + dx,
@@ -425,7 +426,7 @@ export class DesktopCompanion {
 					});
 			} else if (value === "end" || value === "cancel") {
 				this.save();
-				this.finishDrag(value === "end");
+				this.finishDrag();
 			}
 		} else if (action === "nudge" && typeof value === "string") {
 			const offsets: Record<string, [number, number]> = {

@@ -118,6 +118,7 @@ export function companionPreferences(value: unknown): CompanionPreferences {
 
 export const COMPANION_SIZE = { width: 132, height: 136 };
 export const COMPANION_CHAT_SIZE = { width: 316, height: 194 };
+export const COMPANION_DRAG_THRESHOLD = 6;
 
 export function clampCompanionPosition(
 	point: { x: number; y: number },
