@@ -930,6 +930,7 @@ export function CompanionArt({
 	gaze,
 	reaction,
 }: CompanionArtProps) {
+	const [motionReady, setMotionReady] = useState(false);
 	const previousMood = useRef(mood);
 	const [celebrating, setCelebrating] = useState(false);
 	useEffect(() => {
@@ -987,6 +988,7 @@ export function CompanionArt({
 			data-expression={expressionMood}
 			data-reaction={reaction}
 			data-physical={physical || undefined}
+			data-motion-ready={character === "inky" && motionReady ? true : undefined}
 			data-vignette={vignette || undefined}
 			data-sleeping={sleeping || undefined}
 			data-celebrating={celebrating || undefined}
@@ -994,6 +996,14 @@ export function CompanionArt({
 			data-paused={face.paused || undefined}
 			style={tracking}
 		>
+			{character === "inky" && (
+				<img
+					className={cn("companion-art-motion-source")}
+					src={inkyMotion}
+					alt=""
+					onLoad={() => setMotionReady(true)}
+				/>
+			)}
 			<span className={cn("companion-art-pose")}>
 				<span className={cn("companion-art-visual")}>
 					<img

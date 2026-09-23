@@ -271,3 +271,21 @@ test("hidden and reduced-motion faces have no timers and resume their last expre
 		}, state);
 	}
 });
+
+test("Inky keeps the normal body until pickup artwork loads", async () => {
+	await fixture(async ({ render }) => {
+		await render({ character: "inky", reaction: "grabbed" });
+		const art = document.querySelector(".companion-art-inky");
+		const source = art.querySelector(".companion-art-motion-source");
+		assert.ok(source);
+		assert.equal(art.dataset.motionReady, undefined);
+		await act(() => source.dispatchEvent(new dom.window.Event("error")));
+		assert.equal(art.dataset.motionReady, undefined);
+		await act(() => source.dispatchEvent(new dom.window.Event("load")));
+		assert.equal(art.dataset.motionReady, "true");
+		await render({ reaction: "rest" });
+		assert.equal(art.dataset.physical, undefined);
+		await render({ reaction: "grabbed" });
+		assert.equal(art.dataset.motionReady, "true");
+	});
+});

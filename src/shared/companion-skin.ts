@@ -12,6 +12,6 @@ export interface CompanionAppearance {
 export const BUILTIN_COMPANIONS = [
 	{ id: "sprout", name: "Sprout" },
 	{ id: "hoodie", name: "Hoodie" },
-	{ id: "inky", name: "Inky" },
 	{ id: "pixel", name: "Pixel", pixelated: true },
+	{ id: "inky", name: "Inky" },
 ] as const satisfies readonly CompanionAppearance[];

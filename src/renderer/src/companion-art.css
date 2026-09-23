@@ -223,6 +223,10 @@
 		ease-out infinite;
 }
 
+.companion-art-motion-source {
+	display: none;
+}
+
 .companion-art-body {
 	display: block;
 	width: 100%;
@@ -414,11 +418,11 @@
 	height: 22%;
 }
 
-.companion-art-inky[data-physical] .companion-art-body {
+.companion-art-inky[data-motion-ready][data-physical] .companion-art-body {
 	visibility: hidden;
 }
 
-.companion-art-inky[data-physical] .companion-art-sprite {
+.companion-art-inky[data-motion-ready][data-physical] .companion-art-sprite {
 	display: block;
 	background-image: var(--companion-art-sheet);
 	background-size: 400% 200%;
@@ -427,42 +431,50 @@
 	transform: translateY(5%) scale(1.2);
 }
 
-.companion-art-inky[data-physical] .companion-art-face {
+.companion-art-inky[data-motion-ready][data-physical] .companion-art-face {
 	left: 31%;
 	top: 35%;
 	width: 39%;
 	height: 20%;
 }
 
-.companion-art-inky[data-reaction="struggling"] .companion-art-sprite {
+.companion-art-inky[data-motion-ready][data-reaction="struggling"]
+	.companion-art-sprite {
 	animation: companion-art-inky-wriggle var(--companion-art-wriggle)
 		steps(1, end) infinite;
 }
 
-.companion-art-inky[data-reaction="struggling"] .companion-art-face {
+.companion-art-inky[data-motion-ready][data-reaction="struggling"]
+	.companion-art-face {
 	animation: companion-art-inky-look var(--companion-art-wriggle) steps(1, end)
 		infinite;
 }
 
-.companion-art-inky[data-reaction="falling"] .companion-art-sprite {
+.companion-art-inky[data-motion-ready][data-reaction="falling"]
+	.companion-art-sprite {
 	background-position: 0 100%;
 }
 
-.companion-art-inky[data-reaction="falling"] .companion-art-face {
+.companion-art-inky[data-motion-ready][data-reaction="falling"]
+	.companion-art-face {
 	top: 39%;
 }
 
-.companion-art-inky[data-reaction="landing"] .companion-art-sprite {
+.companion-art-inky[data-motion-ready][data-reaction="landing"]
+	.companion-art-sprite {
 	background-position: 33.333333% 100%;
+	transform: translateY(11%) scale(1.2);
 	animation: companion-art-inky-land 520ms steps(1, end) forwards;
 }
 
-.companion-art-inky[data-reaction="landing"] .companion-art-face {
-	top: 47%;
+.companion-art-inky[data-motion-ready][data-reaction="landing"]
+	.companion-art-face {
+	top: 53%;
 	animation: companion-art-inky-settle 520ms steps(1, end) forwards;
 }
 
-.companion-art-inky[data-reaction="landing"] .companion-art-body {
+.companion-art-inky[data-motion-ready][data-reaction="landing"]
+	.companion-art-body {
 	visibility: visible;
 	animation: companion-art-inky-restore 520ms steps(1, end) forwards;
 }
@@ -519,14 +531,14 @@
 @keyframes companion-art-inky-settle {
 	0% {
 		left: 33%;
-		top: 47%;
+		top: 53%;
 		width: 39%;
 		height: 18%;
 	}
 	28%,
 	65% {
 		left: 31%;
-		top: 38%;
+		top: 44%;
 		width: 39%;
 		height: 20%;
 	}
@@ -1531,12 +1543,19 @@
 		transform: var(--companion-art-sleep-pose);
 	}
 
-	.companion-art-inky[data-physical][data-reaction] .companion-art-sprite {
+	.companion-art-inky[data-motion-ready][data-physical][data-reaction]
+		.companion-art-sprite {
 		transform: translateY(5%) scale(1.2);
 	}
 
-	.companion-art-inky[data-reaction="landing"] .companion-art-body {
+	.companion-art-inky[data-motion-ready][data-reaction="landing"]
+		.companion-art-body {
 		visibility: hidden;
+	}
+
+	.companion-art-inky[data-motion-ready][data-physical][data-reaction="landing"]
+		.companion-art-sprite {
+		transform: translateY(11%) scale(1.2);
 	}
 
 	.companion-art-hoodie[data-reaction="landing"] .companion-art-body {
