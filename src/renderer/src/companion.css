@@ -32,7 +32,7 @@ body {
 	bottom: -2px;
 	visibility: hidden;
 	opacity: 0;
-	transition: opacity 160ms ease, visibility 160ms;
+	transition: opacity 120ms ease 100ms, visibility 0s linear 220ms;
 }
 .companion-task-toggle {
 	position: absolute;
@@ -40,10 +40,20 @@ body {
 	top: -2px;
 }
 .companion-pet:hover .companion-chat-toggle,
-.companion-pet:focus-within .companion-chat-toggle,
 .companion-pet[data-engaged="true"] .companion-chat-toggle {
 	visibility: visible;
 	opacity: 1;
+	transition-delay: 180ms;
+}
+.companion-pet:focus-within .companion-chat-toggle {
+	visibility: visible;
+	opacity: 1;
+	transition-delay: 0s;
+}
+.companion[data-play]
+	.companion-art[data-reaction]
+	:is(.companion-art-hearts, .companion-art-glints) {
+	display: none;
 }
 .companion-chat:not([hidden]) {
 	animation: companion-chat-appear 180ms ease-out;
@@ -121,7 +131,7 @@ body {
 	transform: rotate(-4deg);
 }
 .companion-character[data-reaction="struggling"] .companion-custom-art {
-	animation: companion-custom-wriggle 360ms ease-in-out infinite;
+	animation: companion-custom-wriggle 1.9s ease-in-out infinite;
 }
 .companion-character[data-reaction="falling"] .companion-custom-art {
 	transform: scale(0.94, 1.06);
@@ -131,11 +141,17 @@ body {
 }
 @keyframes companion-custom-wriggle {
 	0%,
-	100% {
+	22%,
+	44% {
 		transform: rotate(-4deg);
 	}
-	50% {
+	11%,
+	33% {
 		transform: rotate(4deg);
+	}
+	60%,
+	100% {
+		transform: rotate(-2deg);
 	}
 }
 .companion-character[data-reaction="peekaboo"] .companion-custom-art {

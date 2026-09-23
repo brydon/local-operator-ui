@@ -75,12 +75,6 @@
 	opacity: 0.8;
 	animation: companion-play-thanks 1600ms ease-out both;
 }
-.companion-play-shiny ellipse {
-	fill: none;
-	stroke-width: 1;
-	stroke-dasharray: 3 9;
-	opacity: 0.45;
-}
 .companion-dream {
 	fill: #f3e6c9;
 	opacity: 0;

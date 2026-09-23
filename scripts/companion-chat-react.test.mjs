@@ -234,6 +234,36 @@ test("reply updates preserve scroll position until the next answer", async (t) =
 	assert.equal(document.activeElement, reply());
 });
 
+test("streaming replies remain visible while announcements wait for completion", async (t) => {
+	const { host, render, input } = await mount(t);
+	const message = { id: "answer", role: "assistant", text: "One" };
+	const working = { ...idle, status: "working", canSend: false };
+	await render({ snapshot: { ...working, messages: [message] } });
+	const reply = host.querySelector(".companion-chat-reply p");
+	assert.equal(reply.getAttribute("aria-live"), "polite");
+	assert.equal(reply.getAttribute("aria-busy"), "true");
+	assert.equal(reply.textContent, "One");
+	await render({
+		snapshot: {
+			...working,
+			messages: [{ ...message, text: "One complete answer." }],
+		},
+	});
+	assert.equal(host.querySelector(".companion-chat-reply p"), reply);
+	assert.equal(reply.textContent, "One complete answer.");
+	assert.equal(reply.getAttribute("aria-busy"), "true");
+	await render({
+		snapshot: {
+			...idle,
+			messages: [{ ...message, text: "One complete answer." }],
+		},
+	});
+	assert.equal(reply.getAttribute("aria-busy"), "false");
+	assert.equal(reply.getAttribute("aria-atomic"), "true");
+	assert.equal(reply.textContent, "One complete answer.");
+	assert.equal(document.activeElement, input);
+});
+
 test("pending approval blocks sending and opens the full app", async (t) => {
 	let expanded = false;
 	const { host, render, input, button, type } = await mount(t, {

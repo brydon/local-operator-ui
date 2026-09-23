@@ -134,7 +134,7 @@ export function CompanionPlayArt({
 						)}
 					</g>
 				))}
-			{scene.phase === "finish" && (
+			{scene.phase === "finish" && !scene.shiny && (
 				<path
 					className={cn("companion-play-heart")}
 					d="M80 67C68 59 72 53 77 55L80 58L83 55C88 53 92 59 80 67Z"
@@ -142,7 +142,6 @@ export function CompanionPlayArt({
 			)}
 			{scene.shiny && scene.phase === "finish" && (
 				<g className={cn("companion-play-shiny")}>
-					<ellipse cx="55" cy="58" rx="44" ry="40" />
 					<path d="m18 19 2 5 5 2-5 2-2 5-2-5-5-2 5-2Zm74 10 1.5 4 4 1.5-4 1.5-1.5 4-1.5-4-4-1.5 4-1.5Z" />
 				</g>
 			)}

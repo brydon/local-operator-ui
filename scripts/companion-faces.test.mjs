@@ -232,6 +232,10 @@ test("listening immediately replaces a dramatic face and stays in its attentive 
 		const seen = new Set([emotion()]);
 		for (let i = 0; i < 40; i++) {
 			const previous = emotion();
+			assert.ok(
+				timers.values().next().value.delay >= 3800,
+				"listening holds its expression longer",
+			);
 			const next = await step();
 			assert.ok(attentive.has(next), next);
 			assert.notEqual(

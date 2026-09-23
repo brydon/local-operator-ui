@@ -397,36 +397,41 @@ function useFaceAnimation(
 		const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
 		let timer: number | undefined;
 		const schedule = () => {
-			timer = window.setTimeout(() => {
-				const bridge = (faceBeats[cursor.current].weight ?? 4) < 4;
-				const choices = faceBeats
-					.map((beat, i) => ({ beat, i }))
-					.filter(
-						({ beat, i }) =>
-							!recent.current.includes(i) &&
-							(!listening || beat.attentive) &&
-							(!bridge || (beat.weight ?? 4) === 4),
-					);
-				const habits = faceHabits[character];
-				const followups = habits.after[faceBeats[cursor.current].name];
-				const phrase = listening
-					? []
-					: choices.filter(({ beat }) => followups?.includes(beat.name));
-				const pool = phrase.length && Math.random() > 0.4 ? phrase : choices;
-				const weight = (beat: FaceBeat) =>
-					(beat.weight ?? 4) * (habits.favorites.includes(beat.name) ? 1.7 : 1);
-				let draw =
-					Math.random() * pool.reduce((sum, { beat }) => sum + weight(beat), 0);
-				const next =
-					pool.find(({ beat }) => {
-						draw -= weight(beat);
-						return draw < 0;
-					}) ?? pool[0];
-				cursor.current = next.i;
-				recent.current = [...recent.current.slice(-3), next.i];
-				setIndex(next.i);
-				schedule();
-			}, faceBeats[cursor.current].duration ?? 2800);
+			timer = window.setTimeout(
+				() => {
+					const bridge = (faceBeats[cursor.current].weight ?? 4) < 4;
+					const choices = faceBeats
+						.map((beat, i) => ({ beat, i }))
+						.filter(
+							({ beat, i }) =>
+								!recent.current.includes(i) &&
+								(!listening || beat.attentive) &&
+								(!bridge || (beat.weight ?? 4) === 4),
+						);
+					const habits = faceHabits[character];
+					const followups = habits.after[faceBeats[cursor.current].name];
+					const phrase = listening
+						? []
+						: choices.filter(({ beat }) => followups?.includes(beat.name));
+					const pool = phrase.length && Math.random() > 0.4 ? phrase : choices;
+					const weight = (beat: FaceBeat) =>
+						(beat.weight ?? 4) *
+						(habits.favorites.includes(beat.name) ? 1.7 : 1);
+					let draw =
+						Math.random() *
+						pool.reduce((sum, { beat }) => sum + weight(beat), 0);
+					const next =
+						pool.find(({ beat }) => {
+							draw -= weight(beat);
+							return draw < 0;
+						}) ?? pool[0];
+					cursor.current = next.i;
+					recent.current = [...recent.current.slice(-3), next.i];
+					setIndex(next.i);
+					schedule();
+				},
+				(faceBeats[cursor.current].duration ?? 2800) * (listening ? 2 : 1),
+			);
 		};
 		const refresh = () => {
 			window.clearTimeout(timer);

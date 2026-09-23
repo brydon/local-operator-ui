@@ -121,6 +121,7 @@ export function CompanionChat({
 						className={cn("whitespace-pre-wrap [overflow-wrap:anywhere]")}
 						aria-live="polite"
 						aria-atomic="true"
+						aria-busy={busy}
 					>
 						{reply.text}
 					</p>

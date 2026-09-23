@@ -114,7 +114,7 @@ export function useCompanionInteraction(
 			if (!canRest()) return;
 			const started = window.performance.now();
 			const dozeAt = started + 90_000;
-			const opportunities = [14_000, 36_000, 59_000, 80_000];
+			const opportunities = [28_000, 66_000];
 			const schedule = () => {
 				const now = window.performance.now();
 				const next = reducedMotion.current
@@ -133,7 +133,7 @@ export function useCompanionInteraction(
 							return;
 						}
 						const scene = nextScene.current % 4;
-						const duration = scene === 0 ? 4800 : scene === 1 ? 4000 : 2600;
+						const duration = scene === 0 ? 4800 : scene === 2 ? 4000 : 2600;
 						if (
 							!origin.current &&
 							!attention.current.hovered &&
@@ -151,9 +151,9 @@ export function useCompanionInteraction(
 							play(
 								scene === 0
 									? "peekaboo"
-									: scene === 1
+									: scene === 2
 										? "playful"
-										: scene === 2
+										: scene === 1
 											? timeOfDay
 											: "daydream",
 								duration,
@@ -465,6 +465,7 @@ export function useCompanionInteraction(
 			},
 			onPointerUp: (
 				event?: PointerEvent<HTMLButtonElement>,
+				greet = true,
 			): "tap" | "drag" | null => {
 				const gesture = origin.current;
 				if (
@@ -480,7 +481,12 @@ export function useCompanionInteraction(
 				if (gesture.moved) {
 					wake();
 					play("landing", 900);
-				} else tap(gesture.finding, gesture.waking);
+				} else if (greet) tap(gesture.finding, gesture.waking);
+				else {
+					clear("reaction");
+					setDelight(null);
+					taps.current.count = 0;
+				}
 				return gesture.moved ? "drag" : "tap";
 			},
 			onLostPointerCapture: () => {

@@ -144,9 +144,9 @@ function Companion() {
 		appearance.frames?.[play.scene ? "idle" : state.mood],
 		appearance.frames?.idle,
 	].find((source) => source && !failedImages.includes(source));
-	const acknowledgment =
-		play.announcement ||
-		(reaction === "loved"
+	const acknowledgment = play.scene
+		? play.announcement
+		: reaction === "loved"
 			? `${appearance.name} sends you a heart.`
 			: reaction === "starstruck"
 				? `${appearance.name} lights up with delight.`
@@ -154,7 +154,7 @@ function Companion() {
 					? `${appearance.name} looks happy.`
 					: reaction === "found"
 						? `You found ${appearance.name}.`
-						: "");
+						: "";
 	const playHint = play.scene
 		? play.scene.kind === "guess"
 			? "Choose the left or right hand. Click a side or use Left or Right. Escape ends play."
@@ -277,7 +277,7 @@ function Companion() {
 							window.companion.drag("move");
 					}}
 					onPointerUp={(event) => {
-						const gesture = interaction.handlers.onPointerUp(event);
+						const gesture = interaction.handlers.onPointerUp(event, !playing);
 						if (gesture === null) return;
 						if (gesture === "tap" && play.scene) {
 							const bounds = event.currentTarget.getBoundingClientRect();
@@ -307,6 +307,10 @@ function Companion() {
 						}
 					}}
 					onKeyDown={(event) => {
+						if (event.repeat && (event.key === "Enter" || event.key === " ")) {
+							event.preventDefault();
+							return;
+						}
 						if (
 							event.key === "ContextMenu" ||
 							(event.shiftKey && event.key === "F10")
