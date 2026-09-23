@@ -2,7 +2,7 @@ import { Button } from "@shared/components/ui/button";
 import { cn } from "@shared/lib/utils";
 import { DEFAULT_THEME, applyThemeToDocument } from "@shared/themes";
 import type { ThemeName } from "@shared/themes";
-import { MessageCircle } from "lucide-react";
+import { CircleAlert, MessageCircle } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { COMPANION_OFFLINE } from "../../shared/desktop-companion";
@@ -77,22 +77,6 @@ function Companion() {
 		window.companion.getAppearance,
 		window.companion.onAppearance,
 	);
-	const interaction = useCompanionInteraction(state.mood);
-	const [motion, setMotion] = useState<CompanionMotion>("rest");
-	const reaction = motion === "rest" ? interaction.reaction : motion;
-	useEffect(() => {
-		const unsubscribe = window.companion.onMotion(setMotion);
-		const preference = window.matchMedia("(prefers-reduced-motion: reduce)");
-		const sync = () => window.companion.setReducedMotion(preference.matches);
-		preference.addEventListener("change", sync);
-		sync();
-		return () => {
-			unsubscribe();
-			preference.removeEventListener("change", sync);
-		};
-	}, []);
-	const lastGesture = useRef<"tap" | "drag" | null>(null);
-	const firstClickWasTap = useRef(false);
 	const chat = useCompanionValue<CompanionChatView>(
 		{
 			open: false,
@@ -108,6 +92,38 @@ function Companion() {
 		window.companion.getChat,
 		window.companion.onChat,
 	);
+	const interaction = useCompanionInteraction(state.mood, chat.open);
+	const [motion, setMotion] = useState<CompanionMotion>("rest");
+	const [chatFocused, setChatFocused] = useState(false);
+	const reaction =
+		motion !== "rest"
+			? motion
+			: chat.open &&
+					chatFocused &&
+					(interaction.reaction === "rest" ||
+						interaction.reaction === "curious")
+				? "listening"
+				: interaction.reaction;
+	const needsAttention =
+		!!state.sessionId && (state.mood === "attention" || state.mood === "error");
+	useEffect(() => {
+		const unsubscribe = window.companion.onMotion(setMotion);
+		const preference = window.matchMedia("(prefers-reduced-motion: reduce)");
+		const sync = () => window.companion.setReducedMotion(preference.matches);
+		const focus = () =>
+			setChatFocused(!!document.activeElement?.closest(".companion-chat"));
+		const blur = () => setChatFocused(false);
+		window.addEventListener("focus", focus);
+		window.addEventListener("blur", blur);
+		preference.addEventListener("change", sync);
+		sync();
+		return () => {
+			unsubscribe();
+			window.removeEventListener("focus", focus);
+			window.removeEventListener("blur", blur);
+			preference.removeEventListener("change", sync);
+		};
+	}, []);
 	const wasChatOpen = useRef(false);
 	useEffect(() => {
 		if (wasChatOpen.current && !chat.open)
@@ -158,20 +174,29 @@ function Companion() {
 	}, [chat.open]);
 
 	return (
-		<main className={cn("companion")} data-mood={state.mood}>
+		<main
+			className={cn("companion")}
+			data-mood={state.mood}
+			onFocusCapture={(event) =>
+				setChatFocused(!!event.target.closest(".companion-chat"))
+			}
+			onBlurCapture={(event) =>
+				setChatFocused(
+					event.relatedTarget instanceof Element &&
+						!!event.relatedTarget.closest(".companion-chat"),
+				)
+			}
+		>
 			<div className={cn("companion-pet")} data-engaged={interaction.isEngaged}>
 				<button
 					type="button"
 					className={cn("companion-character")}
 					{...interaction.handlers}
 					data-reaction={reaction}
-					aria-label={`${appearance.name}. ${state.label}. Click to pet. Double-click to chat. Drag or use arrow keys to move. Right-click for options.`}
-					title={`${state.label} · Click to pet · Double-click to chat`}
+					aria-label={`${appearance.name}. ${state.label}. Click to pet. Use the chat button to talk. Drag or use arrow keys to move. Right-click for options.`}
 					onContextMenu={(event) => {
 						event.preventDefault();
 						interaction.reset();
-						lastGesture.current = null;
-						firstClickWasTap.current = false;
 						window.companion.showMenu();
 					}}
 					onPointerDown={(event) => {
@@ -194,8 +219,7 @@ function Companion() {
 							window.companion.drag("move");
 					}}
 					onPointerUp={(event) => {
-						lastGesture.current = interaction.handlers.onPointerUp(event);
-						if (lastGesture.current === null) return;
+						if (interaction.handlers.onPointerUp(event) === null) return;
 						if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
 						window.companion.drag("end");
 						event.currentTarget.releasePointerCapture(event.pointerId);
@@ -210,13 +234,6 @@ function Companion() {
 					}}
 					onClick={(event) => {
 						if (event.detail === 0) interaction.tap();
-						else if (event.detail === 1)
-							firstClickWasTap.current = lastGesture.current === "tap";
-					}}
-					onDoubleClick={() => {
-						if (firstClickWasTap.current && lastGesture.current === "tap")
-							window.companion.openChat();
-						firstClickWasTap.current = false;
 					}}
 					onKeyDown={(event) => {
 						if (
@@ -266,6 +283,23 @@ function Companion() {
 						/>
 					)}
 				</button>
+				{needsAttention && (
+					<Button
+						type="button"
+						variant="secondary"
+						size="icon-sm"
+						className={cn("companion-task-toggle rounded-full")}
+						aria-label={
+							state.mood === "error"
+								? "Review task error"
+								: "Review task request"
+						}
+						title={state.label}
+						onClick={() => window.companion.openTask()}
+					>
+						<CircleAlert aria-hidden="true" />
+					</Button>
+				)}
 				<Button
 					type="button"
 					variant="secondary"

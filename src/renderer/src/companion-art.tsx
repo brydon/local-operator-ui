@@ -1,5 +1,5 @@
 import { cn } from "@shared/lib/utils";
-import type { CSSProperties } from "react";
+import { type CSSProperties, useEffect, useRef, useState } from "react";
 import type { CompanionMood } from "../../shared/desktop-companion";
 import hoodieMotion from "./assets/companions/hoodie-motion.png";
 import hoodie from "./assets/companions/hoodie.png";
@@ -17,6 +17,9 @@ export type CompanionReaction =
 	| "struggling"
 	| "falling"
 	| "happy"
+	| "loved"
+	| "waking"
+	| "listening"
 	| "landing"
 	| "dozing";
 
@@ -63,6 +66,7 @@ const eyeRects = {
 	attention: { x: 19, y: 17, width: 16, height: 24, rx: 8 },
 	curious: { x: 18, y: 12, width: 18, height: 29, rx: 8 },
 	idle: { x: 19, y: 16, width: 16, height: 25, rx: 8 },
+	waking: { x: 19, y: 25, width: 16, height: 12, rx: 6 },
 };
 
 function Eyes({ mood, pixels, reaction }: ExpressionProps) {
@@ -119,14 +123,17 @@ function Eyes({ mood, pixels, reaction }: ExpressionProps) {
 		expression === "offline" ||
 		expression === "complete" ||
 		expression === "pressed" ||
+		expression === "loved" ||
 		expression === "landing"
 	) {
 		return (
 			<path
 				d={
-					eyePaths[expression === "landing" ? "pressed" : expression][
-						pixels ? 1 : 0
-					]
+					eyePaths[
+						expression === "landing" || expression === "loved"
+							? "pressed"
+							: expression
+					][pixels ? 1 : 0]
 				}
 			/>
 		);
@@ -148,9 +155,11 @@ function Eyes({ mood, pixels, reaction }: ExpressionProps) {
 		eyeRects[
 			mood === "working" || mood === "attention"
 				? mood
-				: reaction === "rest"
-					? "idle"
-					: "curious"
+				: reaction === "waking"
+					? "waking"
+					: reaction === "rest" || reaction === "listening"
+						? "idle"
+						: "curious"
 		];
 	return [0, 46].map((offset) => (
 		<rect
@@ -181,6 +190,16 @@ function Mouth({ mood, pixels, reaction }: ExpressionProps) {
 		return <path d={pixels ? "M40 58v-5h20v5" : "M40 58q10-10 20 0"} />;
 	}
 	if (mood === "idle") {
+		if (reaction === "loved")
+			return (
+				<path
+					d={pixels ? "M41 51v4h6v-3h6v3h6v-4" : "M40 50q5 10 10 3q5 7 10-3"}
+				/>
+			);
+		if (reaction === "waking")
+			return <rect x="46" y="50" width="8" height="10" rx={pixels ? 0 : 4} />;
+		if (reaction === "listening")
+			return <path d={pixels ? "M42 51v4h16v-4" : "M42 50q8 10 16 0"} />;
 		if (reaction === "grabbed" || reaction === "falling") {
 			return <rect x="44" y="49" width="12" height="13" rx={pixels ? 0 : 6} />;
 		}
@@ -218,6 +237,20 @@ export function CompanionArt({
 	gaze,
 	reaction,
 }: CompanionArtProps) {
+	const previousMood = useRef(mood);
+	const [celebrating, setCelebrating] = useState(false);
+	useEffect(() => {
+		const completed =
+			mood === "complete" && previousMood.current !== "complete";
+		previousMood.current = mood;
+		if (!completed) {
+			if (mood !== "complete") setCelebrating(false);
+			return;
+		}
+		setCelebrating(true);
+		const timer = window.setTimeout(() => setCelebrating(false), 700);
+		return () => window.clearTimeout(timer);
+	}, [mood]);
 	const pixels = character === "pixel";
 	const physical = physicalReactions.has(reaction);
 	const expressionMood =
@@ -226,8 +259,8 @@ export function CompanionArt({
 			? "idle"
 			: mood;
 	const interacting = reaction !== "rest" && reaction !== "dozing";
-	const x = interacting ? gaze.x : 0;
-	const y = interacting ? gaze.y : 0;
+	const x = reaction === "listening" ? -0.55 : interacting ? gaze.x : 0;
+	const y = reaction === "listening" ? -0.45 : interacting ? gaze.y : 0;
 	const tracking = {
 		"--companion-art-gaze-x": `${x * 7}px`,
 		"--companion-art-gaze-y": `${y * 4}px`,
@@ -244,6 +277,7 @@ export function CompanionArt({
 			data-expression={expressionMood}
 			data-reaction={reaction}
 			data-physical={physical || undefined}
+			data-celebrating={celebrating || undefined}
 			style={tracking}
 		>
 			<span className={cn("companion-art-pose")}>
@@ -305,6 +339,15 @@ export function CompanionArt({
 					</svg>
 				</span>
 			</span>
+			<svg
+				aria-hidden="true"
+				className={cn("companion-art-hearts")}
+				viewBox="0 0 100 100"
+				focusable="false"
+			>
+				<path d="M18 37l-4-4c-4-4 1-8 4-4c3-4 8 0 4 4Z" />
+				<path d="M83 29l-3-3c-3-3 1-6 3-3c2-3 6 0 3 3Z" />
+			</svg>
 			<svg
 				aria-hidden="true"
 				className={cn("companion-art-impact")}

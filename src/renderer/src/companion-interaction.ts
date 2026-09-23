@@ -6,7 +6,10 @@ import {
 } from "../../shared/desktop-companion";
 import type { CompanionReaction } from "./companion-art";
 
-export function useCompanionInteraction(mood: CompanionMood = "idle") {
+export function useCompanionInteraction(
+	mood: CompanionMood = "idle",
+	chatOpen = false,
+) {
 	const [hovered, setHovered] = useState(false);
 	const [focused, setFocused] = useState(false);
 	const [pressed, setPressed] = useState(false);
@@ -14,7 +17,9 @@ export function useCompanionInteraction(mood: CompanionMood = "idle") {
 		"grabbed" | "dragging" | "struggling" | null
 	>(null);
 	const [dozing, setDozing] = useState(false);
-	const [delight, setDelight] = useState<"happy" | "landing" | null>(null);
+	const [delight, setDelight] = useState<
+		"happy" | "loved" | "waking" | "landing" | null
+	>(null);
 	const [gaze, setGaze] = useState({ x: 0, y: 0 });
 	const origin = useRef<{
 		x: number;
@@ -30,6 +35,10 @@ export function useCompanionInteraction(mood: CompanionMood = "idle") {
 		started: number;
 	} | null>(null);
 	const lastPetAt = useRef(Number.NEGATIVE_INFINITY);
+	const lastLovedAt = useRef(Number.NEGATIVE_INFINITY);
+	const taps = useRef({ count: 0, started: 0 });
+	const sleeping = useRef(false);
+	const chatVisible = useRef(chatOpen);
 	const timers = useRef({ idle: 0, hold: 0, reaction: 0 });
 	const frame = useRef<number | null>(null);
 	const nextGaze = useRef({ x: 0, y: 0 });
@@ -43,17 +52,8 @@ export function useCompanionInteraction(mood: CompanionMood = "idle") {
 		if (frame.current !== null) cancelAnimationFrame(frame.current);
 		frame.current = null;
 	}, []);
-	const wake = useCallback(() => {
-		clear("idle");
-		setDozing(false);
-		if (currentMood.current === "idle" && !document.hidden)
-			timers.current.idle = window.setTimeout(() => {
-				timers.current.idle = 0;
-				if (!origin.current && !document.hidden) setDozing(true);
-			}, 25_000);
-	}, [clear]);
 	const play = useCallback(
-		(reaction: "happy" | "landing", duration: number) => {
+		(reaction: "happy" | "loved" | "waking" | "landing", duration: number) => {
 			clear("reaction");
 			setDelight(reaction);
 			timers.current.reaction = window.setTimeout(() => {
@@ -63,10 +63,43 @@ export function useCompanionInteraction(mood: CompanionMood = "idle") {
 		},
 		[clear],
 	);
+	const wake = useCallback(
+		(stretch = true) => {
+			clear("idle");
+			if (sleeping.current && stretch) play("waking", 800);
+			sleeping.current = false;
+			setDozing(false);
+			if (
+				currentMood.current === "idle" &&
+				!chatVisible.current &&
+				!document.hidden
+			)
+				timers.current.idle = window.setTimeout(() => {
+					timers.current.idle = 0;
+					if (!origin.current && !document.hidden) {
+						sleeping.current = true;
+						setDozing(true);
+					}
+				}, 25_000);
+		},
+		[clear, play],
+	);
+	const love = useCallback(() => {
+		const time = window.performance.now();
+		const ready = time - lastLovedAt.current >= 2000;
+		if (ready) lastLovedAt.current = time;
+		play(ready ? "loved" : "happy", 1200);
+	}, [play]);
 	const tap = useCallback(() => {
 		wake();
-		play("happy", 1200);
-	}, [play, wake]);
+		const time = window.performance.now();
+		if (time - taps.current.started > 1000)
+			taps.current = { count: 0, started: time };
+		if (++taps.current.count >= 3) {
+			taps.current.count = 0;
+			love();
+		} else play("happy", 1200);
+	}, [love, play, wake]);
 	const cleanup = useCallback(() => {
 		clear("idle");
 		clear("hold");
@@ -75,6 +108,8 @@ export function useCompanionInteraction(mood: CompanionMood = "idle") {
 		const gesture = origin.current;
 		origin.current = null;
 		rub.current = null;
+		taps.current.count = 0;
+		sleeping.current = false;
 		if (gesture?.target.hasPointerCapture(gesture.pointerId))
 			gesture.target.releasePointerCapture(gesture.pointerId);
 	}, [cancelFrame, clear]);
@@ -96,7 +131,7 @@ export function useCompanionInteraction(mood: CompanionMood = "idle") {
 
 	function pet(event: PointerEvent<HTMLButtonElement>) {
 		const bounds = event.currentTarget.getBoundingClientRect();
-		const time = event.timeStamp;
+		const time = window.performance.now();
 		if (
 			origin.current ||
 			(currentMood.current !== "idle" && currentMood.current !== "complete") ||
@@ -121,7 +156,7 @@ export function useCompanionInteraction(mood: CompanionMood = "idle") {
 		if (stroke.turns >= 3) {
 			lastPetAt.current = time;
 			rub.current = null;
-			play("happy", 1200);
+			love();
 		}
 	}
 
@@ -148,18 +183,20 @@ export function useCompanionInteraction(mood: CompanionMood = "idle") {
 
 	useEffect(() => {
 		currentMood.current = mood;
+		chatVisible.current = chatOpen;
 		rub.current = null;
-		wake();
+		wake(chatOpen);
 		return () => clear("idle");
-	}, [mood, wake, clear]);
+	}, [mood, chatOpen, wake, clear]);
 	useEffect(() => {
 		const visibility = () => (document.hidden ? reset() : wake());
+		const focus = () => wake();
 		window.addEventListener("blur", blur);
-		window.addEventListener("focus", wake);
+		window.addEventListener("focus", focus);
 		document.addEventListener("visibilitychange", visibility);
 		return () => {
 			window.removeEventListener("blur", blur);
-			window.removeEventListener("focus", wake);
+			window.removeEventListener("focus", focus);
 			document.removeEventListener("visibilitychange", visibility);
 			cleanup();
 		};
@@ -242,6 +279,7 @@ export function useCompanionInteraction(mood: CompanionMood = "idle") {
 				) {
 					const gesture = origin.current;
 					gesture.moved = true;
+					taps.current.count = 0;
 					clear("hold");
 					setDelight(null);
 					setDragging("grabbed");
@@ -270,8 +308,10 @@ export function useCompanionInteraction(mood: CompanionMood = "idle") {
 				clear("hold");
 				setPressed(false);
 				setDragging(null);
-				wake();
-				play(gesture.moved ? "landing" : "happy", gesture.moved ? 900 : 1200);
+				if (gesture.moved) {
+					wake();
+					play("landing", 900);
+				} else tap();
 				return gesture.moved ? "drag" : "tap";
 			},
 			onLostPointerCapture: () => {

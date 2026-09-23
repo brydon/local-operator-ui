@@ -15,6 +15,7 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 const timers = new Map();
 let now = 0;
 let timerId = 0;
+window.performance.now = () => now;
 window.setTimeout = (callback, delay) => {
 	timers.set(++timerId, { callback, due: now + delay });
 	return timerId;
@@ -73,9 +74,10 @@ async function fixture(callback) {
 	document.body.append(host);
 	const root = createRoot(host);
 	let mood = "idle";
+	let chatOpen = false;
 	let released;
 	function Probe() {
-		const interaction = useCompanionInteraction(mood);
+		const interaction = useCompanionInteraction(mood, chatOpen);
 		return React.createElement("button", {
 			type: "button",
 			...interaction.handlers,
@@ -144,6 +146,10 @@ async function fixture(callback) {
 				mood = next;
 				await act(async () => root.render(React.createElement(Probe)));
 			},
+			chat: async (open) => {
+				chatOpen = open;
+				await act(async () => root.render(React.createElement(Probe)));
+			},
 			visibility: async (hidden) =>
 				act(async () => {
 					Object.defineProperty(document, "hidden", {
@@ -210,6 +216,55 @@ test("a tap is happy, a six-pixel move stays a tap, and dragging lands without a
 	});
 });
 
+test("three rapid taps show love with a shared cooldown and no extra timers", async () => {
+	await fixture(async ({ button, event, advance }) => {
+		const tap = async () => {
+			await event("pointerdown");
+			await event("pointerup");
+		};
+		await tap();
+		assert.equal(button.dataset.reaction, "happy");
+		await advance(200);
+		await tap();
+		await advance(200);
+		await tap();
+		assert.equal(button.dataset.reaction, "loved");
+		for (let i = 0; i < 3; i++) await tap();
+		assert.equal(button.dataset.reaction, "happy");
+		assert.equal(timers.size, 2);
+		await advance(2000);
+		for (let i = 0; i < 3; i++) await tap();
+		assert.equal(button.dataset.reaction, "loved");
+		for (let i = 0; i < 3; i++) {
+			await advance(1100);
+			await tap();
+			assert.equal(button.dataset.reaction, "happy");
+		}
+	});
+});
+
+test("chat keeps the companion awake; waking yields immediately to a new grab", async () => {
+	await fixture(async ({ button, event, advance, chat }) => {
+		await advance(25_000);
+		assert.equal(button.dataset.reaction, "dozing");
+		await chat(true);
+		assert.equal(button.dataset.reaction, "waking");
+		await advance(30_000);
+		assert.equal(button.dataset.reaction, "rest");
+		assert.equal(timers.size, 0);
+		await chat(false);
+		await advance(25_000);
+		await event("pointerover");
+		assert.equal(button.dataset.reaction, "waking");
+		await event("pointerdown");
+		assert.equal(button.dataset.reaction, "pressed");
+		await event("pointermove", { screenX: 120 });
+		assert.equal(button.dataset.reaction, "grabbed");
+		await advance(800);
+		assert.equal(button.dataset.reaction, "dragging");
+	});
+});
+
 test("carrying progresses on one clock even while the pointer keeps moving", async () => {
 	await fixture(async ({ button, event, advance, released }) => {
 		await event("pointerdown");
@@ -259,7 +314,7 @@ test("head rub reversals give bounded joy while idle or complete", async () => {
 				await event("pointermove", { screenX, clientY: 40 });
 		};
 		await rub();
-		assert.equal(button.dataset.reaction, "happy");
+		assert.equal(button.dataset.reaction, "loved");
 		assert.equal(timers.size, 2);
 		await advance(1000);
 		await rub();
@@ -271,9 +326,9 @@ test("head rub reversals give bounded joy while idle or complete", async () => {
 		assert.equal(button.dataset.reaction, "rest");
 		for (const state of ["idle", "complete"]) {
 			await mood(state);
-			await advance(1800);
+			await advance(2000);
 			await rub();
-			assert.equal(button.dataset.reaction, "happy");
+			assert.equal(button.dataset.reaction, "loved");
 		}
 	});
 });
@@ -285,6 +340,8 @@ test("only an idle companion dozes, and hover, focus or work wakes it", async ()
 		await advance(1);
 		assert.equal(button.dataset.reaction, "dozing");
 		await event("pointerover");
+		assert.equal(button.dataset.reaction, "waking");
+		await advance(800);
 		assert.equal(button.dataset.reaction, "curious");
 		await event("pointerout");
 		await advance(25_000);
@@ -296,7 +353,7 @@ test("only an idle companion dozes, and hover, focus or work wakes it", async ()
 		await mood("idle");
 		await advance(25_000);
 		await act(async () => button.focus());
-		assert.equal(button.dataset.reaction, "curious");
+		assert.equal(button.dataset.reaction, "waking");
 		await visibility(true);
 		await mood("working");
 		await mood("idle");

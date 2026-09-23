@@ -2,6 +2,8 @@
 	--companion-art-light: #c8fbd7;
 	--companion-art-breath: 4.8s;
 	--companion-art-blink: 6.4s;
+	--companion-art-affection: 1050ms;
+	--companion-art-wriggle: 1.9s;
 	--companion-art-motion: cubic-bezier(0.22, 0.7, 0.3, 1);
 	display: block;
 	position: relative;
@@ -19,11 +21,15 @@
 .companion-art-hoodie {
 	--companion-art-breath: 5.4s;
 	--companion-art-blink: 7.2s;
+	--companion-art-affection: 1150ms;
+	--companion-art-wriggle: 2s;
 }
 
 .companion-art-pixel {
 	--companion-art-breath: 5.6s;
 	--companion-art-blink: 5.8s;
+	--companion-art-affection: 900ms;
+	--companion-art-wriggle: 1.7s;
 	--companion-art-motion: steps(5, end);
 }
 
@@ -73,11 +79,8 @@
 
 .companion-art[data-reaction="struggling"] .companion-art-pose {
 	transform-origin: 50% 20%;
-	animation: companion-art-wriggle 420ms var(--companion-art-motion) infinite;
-}
-
-.companion-art-pixel[data-reaction="struggling"] .companion-art-pose {
-	animation-duration: 360ms;
+	animation: companion-art-wriggle var(--companion-art-wriggle)
+		var(--companion-art-motion) infinite;
 }
 
 .companion-art[data-reaction="falling"] .companion-art-pose {
@@ -89,6 +92,31 @@
 .companion-art[data-expression="idle"][data-reaction="happy"]
 	.companion-art-pose {
 	animation: companion-art-boop 600ms var(--companion-art-motion);
+}
+
+.companion-art[data-expression="idle"][data-reaction="loved"]
+	.companion-art-pose {
+	animation: companion-art-love var(--companion-art-affection) ease-in-out;
+}
+
+.companion-art[data-expression="idle"][data-reaction="waking"]
+	.companion-art-pose {
+	animation: companion-art-wake 800ms var(--companion-art-motion);
+}
+
+.companion-art[data-expression="idle"][data-reaction="waking"]
+	.companion-art-eyes {
+	animation: companion-art-wake-eyes 800ms ease-in-out;
+}
+
+.companion-art[data-expression="idle"][data-reaction="listening"]
+	.companion-art-pose {
+	transform: translateY(-1px) rotate(-2deg);
+}
+
+.companion-art[data-expression="idle"][data-reaction="listening"]
+	.companion-art-visual {
+	animation-duration: 6.5s;
 }
 
 .companion-art[data-reaction="landing"] .companion-art-pose {
@@ -191,11 +219,17 @@
 }
 
 .companion-art[data-reaction="struggling"] .companion-art-foot {
-	animation-duration: 300ms;
+	animation-name: companion-art-flurry;
+	animation-duration: var(--companion-art-wriggle);
 }
 
 .companion-art[data-physical] .companion-art-foot-right {
 	animation-direction: reverse;
+}
+
+.companion-art[data-reaction="struggling"] .companion-art-foot-right {
+	animation-direction: normal;
+	animation-delay: -210ms;
 }
 
 .companion-art-hoodie[data-physical] .companion-art-body {
@@ -208,6 +242,7 @@
 	background-image: var(--companion-art-sheet);
 	background-size: 400% 200%;
 	background-position: 66.666667% 0;
+	transform-origin: 50% 95%;
 }
 
 .companion-art-hoodie[data-physical] .companion-art-face {
@@ -219,11 +254,13 @@
 }
 
 .companion-art-hoodie[data-reaction="struggling"] .companion-art-sprite {
-	animation: companion-art-hoodie-kick 420ms steps(1, end) infinite;
+	animation: companion-art-hoodie-kick var(--companion-art-wriggle)
+		steps(1, end) infinite;
 }
 
 .companion-art-hoodie[data-reaction="struggling"] .companion-art-face {
-	animation: companion-art-hoodie-look 420ms steps(1, end) infinite;
+	animation: companion-art-hoodie-look var(--companion-art-wriggle)
+		steps(1, end) infinite;
 }
 
 .companion-art-hoodie[data-reaction="falling"] .companion-art-sprite {
@@ -246,6 +283,11 @@
 	top: 41%;
 	transform: none;
 	animation: companion-art-hoodie-settle 520ms steps(1, end) forwards;
+}
+
+.companion-art-hoodie[data-reaction="landing"] .companion-art-body {
+	visibility: visible;
+	animation: companion-art-hoodie-restore 520ms ease-out forwards;
 }
 
 .companion-art-face {
@@ -307,8 +349,24 @@
 .companion-art[data-expression="idle"][data-reaction="rest"]
 	.companion-art-eyes,
 .companion-art[data-expression="idle"][data-reaction="curious"]
+	.companion-art-eyes,
+.companion-art[data-expression="idle"][data-reaction="listening"]
 	.companion-art-eyes {
 	animation: companion-art-blink var(--companion-art-blink) ease-in-out infinite;
+}
+
+.companion-art-hearts {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	fill: var(--companion-art-light);
+	opacity: 0;
+}
+
+.companion-art[data-expression="idle"][data-reaction="loved"]
+	.companion-art-hearts {
+	animation: companion-art-love-hearts var(--companion-art-affection) ease-out;
 }
 
 .companion-art-glints {
@@ -340,11 +398,7 @@
 	animation: companion-art-impact 400ms ease-out;
 }
 
-.companion-art[data-expression="complete"] .companion-art-visual {
-	animation: companion-art-boop 600ms var(--companion-art-motion);
-}
-
-.companion-art[data-expression="complete"] .companion-art-glints,
+.companion-art[data-celebrating] .companion-art-glints,
 .companion-art[data-expression="idle"][data-reaction="happy"]
 	.companion-art-glints {
 	animation: companion-art-glint 700ms ease-out;
@@ -434,11 +488,33 @@
 
 @keyframes companion-art-wriggle {
 	0%,
-	100% {
+	22%,
+	44% {
 		transform: translateY(-2px) rotate(-7deg) scale(0.97, 1.03);
 	}
-	50% {
+	11%,
+	33% {
 		transform: translateY(-1px) rotate(7deg) scale(1.02, 0.97);
+	}
+	60%,
+	100% {
+		transform: translateY(-2px) scale(0.96, 1.04);
+	}
+}
+
+@keyframes companion-art-flurry {
+	0%,
+	24%,
+	48% {
+		transform: translateY(1px) rotate(-18deg);
+	}
+	12%,
+	36% {
+		transform: translateY(-3px) rotate(24deg);
+	}
+	60%,
+	100% {
+		transform: none;
 	}
 }
 
@@ -454,22 +530,28 @@
 
 @keyframes companion-art-hoodie-kick {
 	0%,
+	22%,
+	44%,
 	100% {
 		background-position: 66.666667% 0;
 	}
-	50% {
+	11%,
+	33% {
 		background-position: 100% 0;
 	}
 }
 
 @keyframes companion-art-hoodie-look {
 	0%,
+	22%,
+	44%,
 	100% {
 		left: 34%;
 		top: 31%;
 		transform: rotate(-5deg);
 	}
-	50% {
+	11%,
+	33% {
 		left: 34%;
 		top: 31%;
 		transform: rotate(5deg);
@@ -479,13 +561,22 @@
 @keyframes companion-art-hoodie-land {
 	0% {
 		background-position: 33.333333% 100%;
+		opacity: 1;
+		transform: none;
 	}
 	28% {
 		background-position: 66.666667% 100%;
 	}
-	80%,
+	80% {
+		background-position: 100% 100%;
+		opacity: 1;
+		transform: none;
+		animation-timing-function: ease-out;
+	}
 	100% {
 		background-position: 100% 100%;
+		opacity: 0;
+		transform: translateY(-4px) scale(1.03);
 	}
 }
 
@@ -500,11 +591,81 @@
 		top: 37%;
 		transform: rotate(-5deg);
 	}
-	80%,
-	100% {
+	80% {
 		left: 34%;
 		top: 33%;
 		transform: none;
+		animation-timing-function: ease-out;
+	}
+	100% {
+		left: 33%;
+		top: 26%;
+		transform: none;
+	}
+}
+
+@keyframes companion-art-hoodie-restore {
+	0%,
+	80% {
+		opacity: 0;
+	}
+	100% {
+		opacity: 1;
+	}
+}
+
+@keyframes companion-art-love {
+	0%,
+	100% {
+		transform: none;
+	}
+	25%,
+	60% {
+		transform: translateY(2px) rotate(-4deg) scale(1.045, 0.955);
+	}
+}
+
+@keyframes companion-art-love-hearts {
+	0% {
+		opacity: 0;
+		transform: translateY(2px) scale(0.95);
+	}
+	25%,
+	65% {
+		opacity: 0.8;
+	}
+	100% {
+		opacity: 0;
+		transform: translateY(-5px);
+	}
+}
+
+@keyframes companion-art-wake {
+	0% {
+		transform: translateY(2px) rotate(-2deg) scaleY(0.97);
+	}
+	45% {
+		transform: translateY(-3px) rotate(1deg) scale(0.98, 1.055);
+	}
+	75% {
+		transform: scaleY(1.015);
+	}
+	100% {
+		transform: none;
+	}
+}
+
+@keyframes companion-art-wake-eyes {
+	0%,
+	15% {
+		transform: scaleY(0.2);
+	}
+	40%,
+	100% {
+		transform: scaleY(1);
+	}
+	65% {
+		transform: scaleY(0.2);
 	}
 }
 
@@ -558,12 +719,14 @@
 	.companion-art[data-expression][data-reaction]
 		:is(
 			.companion-art-pose,
+			.companion-art-body,
 			.companion-art-visual,
 			.companion-art-eyes,
 			.companion-art-gaze,
 			.companion-art-progress rect,
 			.companion-art-glints,
 			.companion-art-impact,
+			.companion-art-hearts,
 			.companion-art-sprite,
 			.companion-art-foot,
 			.companion-art-face
@@ -571,11 +734,21 @@
 		animation: none;
 		transition: none;
 		transform: none;
-		opacity: 1;
 	}
 
 	.companion-art-glints,
+	.companion-art-hearts,
 	.companion-art-impact {
 		display: none;
+	}
+
+	.companion-art[data-expression="idle"][data-reaction="loved"]
+		.companion-art-hearts {
+		display: block;
+		opacity: 0.65;
+	}
+
+	.companion-art-hoodie[data-reaction="landing"] .companion-art-body {
+		visibility: hidden;
 	}
 }

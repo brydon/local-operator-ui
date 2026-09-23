@@ -1,14 +1,16 @@
 # Desktop companion
 
-Click the pet to say hi; double-click or use its chat button to talk with your
+Click the pet to say hi; use its chat button or right-click **Chat** to talk with your
 default model. Drag to move it, or use the arrow keys while it has focus. In chat,
 Enter sends; Shift+Enter adds a line. Escape collapses the input; drafts survive collapsing and hiding, but not
 quitting. Use **Open app** for approvals, attachments, model selection, or history.
 Right-click for character choices, Hide, and Open task in app.
+When a task needs attention, the alert button opens that task directly.
 
-Brush back and forth over their head to pet them. Pick them up to see them dangle
-and wriggle; releasing gives them a short fall and a soft landing. Idle companions
-eventually doze off. Reduced motion keeps these reactions still and disables the drop.
+Brush back and forth over their head or tap a few times for a little heart reaction.
+Pick them up to see them dangle and wriggle; releasing gives them a short fall and
+a soft landing. Idle companions doze off and stretch when you return; they stay
+awake while chat is open. Reduced motion keeps reactions still and disables the drop.
 
 ## Custom characters
 

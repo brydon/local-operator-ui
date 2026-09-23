@@ -34,6 +34,11 @@ body {
 	opacity: 0;
 	transition: opacity 160ms ease, visibility 160ms;
 }
+.companion-task-toggle {
+	position: absolute;
+	right: -2px;
+	top: -2px;
+}
 .companion-pet:hover .companion-chat-toggle,
 .companion-pet:focus-within .companion-chat-toggle,
 .companion-pet[data-engaged="true"] .companion-chat-toggle {
