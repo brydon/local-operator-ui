@@ -81,9 +81,10 @@ async function fixture(callback, greet = true) {
 	const root = createRoot(host);
 	let mood = "idle";
 	let chatOpen = false;
+	let character = "sprout";
 	let released;
 	function Probe() {
-		const interaction = useCompanionInteraction(mood, chatOpen);
+		const interaction = useCompanionInteraction(mood, chatOpen, character);
 		return React.createElement("button", {
 			type: "button",
 			...interaction.handlers,
@@ -165,6 +166,10 @@ async function fixture(callback, greet = true) {
 			},
 			chat: async (open) => {
 				chatOpen = open;
+				await act(async () => root.render(React.createElement(Probe)));
+			},
+			character: async (next) => {
+				character = next;
 				await act(async () => root.render(React.createElement(Probe)));
 			},
 			visibility: async (hidden) =>
@@ -353,6 +358,187 @@ test("quiet rests alternate one playful scene and one time-of-day gesture before
 		assert.equal(button.dataset.reaction, "rest");
 		await advance(1000);
 		assert.equal(button.dataset.reaction, "dozing");
+	});
+});
+
+test("Inky rotates discoveries without adding idle opportunities or delaying sleep", async () => {
+	await fixture(async ({ button, advance, hour, event, character }) => {
+		await character("inky");
+		hour(23);
+		for (const [first, second, firstDuration, secondDuration] of [
+			["peekaboo", "yawning", 4800, 2600],
+			["bubbles", "daydream", 4000, 2600],
+			["leafplay", "playful", 4000, 4000],
+			["shell", "yawning", 4000, 2600],
+		]) {
+			await advance(27_999);
+			assert.equal(button.dataset.reaction, "rest");
+			await advance(1);
+			assert.equal(button.dataset.reaction, first);
+			assert.equal(timers.size, 2);
+			await advance(firstDuration - 1);
+			assert.equal(button.dataset.reaction, first);
+			await advance(1);
+			assert.equal(button.dataset.reaction, "rest");
+			await advance(38_000 - firstDuration);
+			assert.equal(button.dataset.reaction, second);
+			await advance(secondDuration);
+			assert.equal(button.dataset.reaction, "rest");
+			await advance(24_000 - secondDuration);
+			assert.equal(button.dataset.reaction, "dozing");
+			assert.equal(timers.size, 0);
+			await event("click");
+		}
+		await advance(28_000);
+		assert.equal(button.dataset.reaction, "peekaboo");
+	});
+});
+
+test("Inky discoveries yield to engagement and never resume a queued scene", async () => {
+	for (const scene of ["bubbles", "leafplay", "shell"]) {
+		await fixture(async (f) => {
+			await f.character("inky");
+			for (const next of ["bubbles", "leafplay", "shell"]) {
+				await f.advance(90_000);
+				await f.event("click");
+				if (next === scene) break;
+			}
+			await f.advance(28_000);
+			assert.equal(f.button.dataset.reaction, scene);
+			await f.event("pointerover");
+			assert.equal(f.button.dataset.reaction, "curious");
+			await f.event("pointerout");
+			await f.advance(27_999);
+			assert.equal(f.button.dataset.reaction, "rest");
+			await f.advance(1);
+			assert.notEqual(f.button.dataset.reaction, scene);
+		});
+	}
+	for (const [interrupt, resume, next] of [
+		[(f) => f.mood("working"), (f) => f.mood("idle"), "daydream"],
+		[(f) => f.chat(true), (f) => f.chat(false), "daydream"],
+		[(f) => f.visibility(true), (f) => f.visibility(false), "daydream"],
+		[(f) => f.character("hoodie"), (f) => f.character("inky"), "peekaboo"],
+		[
+			() => act(async () => window.dispatchEvent(new dom.window.Event("blur"))),
+			() =>
+				act(async () => window.dispatchEvent(new dom.window.Event("focus"))),
+			"daydream",
+		],
+	]) {
+		await fixture(async (f) => {
+			await f.character("inky");
+			await f.advance(90_000);
+			await f.event("click");
+			await f.advance(28_000);
+			assert.equal(f.button.dataset.reaction, "bubbles");
+			await interrupt(f);
+			assert.equal(f.button.dataset.reaction, "rest");
+			await f.advance(4000);
+			await resume(f);
+			await f.advance(27_999);
+			assert.equal(f.button.dataset.reaction, "rest");
+			await f.advance(1);
+			assert.equal(f.button.dataset.reaction, next);
+			await f.advance(38_000);
+			assert.equal(
+				f.button.dataset.reaction,
+				next === "daydream" ? "leafplay" : "daydream",
+			);
+		});
+	}
+});
+
+test("Inky cuddles alternate accepted affection while the rare reward keeps priority", async () => {
+	await fixture(async ({ button, event, advance, character }) => {
+		await character("inky");
+		const love = async () => {
+			for (let i = 0; i < 3; i++) await event("click");
+		};
+		await love();
+		assert.equal(button.dataset.reaction, "loved");
+		await love();
+		assert.equal(button.dataset.reaction, "happy");
+		await advance(2000);
+		await love();
+		assert.equal(button.dataset.reaction, "cuddle");
+		assert.equal(timers.size, 2);
+		await advance(3999);
+		assert.equal(button.dataset.reaction, "cuddle");
+		await advance(1);
+		assert.equal(button.dataset.reaction, "rest");
+		await love();
+		assert.equal(button.dataset.reaction, "loved");
+		await advance(2000);
+		await love();
+		assert.equal(button.dataset.reaction, "starstruck");
+		await advance(2000);
+		await love();
+		assert.equal(button.dataset.reaction, "cuddle");
+	});
+});
+
+test("Inky affection and carrying reset cleanly on interruptions and character changes", async () => {
+	for (const [interrupt, resume] of [
+		[(f) => f.mood("working"), (f) => f.mood("idle")],
+		[(f) => f.chat(true), (f) => f.chat(false)],
+		[(f) => f.visibility(true), (f) => f.visibility(false)],
+		[(f) => f.character("pixel"), (f) => f.character("inky")],
+		[
+			() => act(async () => window.dispatchEvent(new dom.window.Event("blur"))),
+			async () => {},
+		],
+	]) {
+		await fixture(async (f) => {
+			await f.character("inky");
+			const love = async () => {
+				for (let i = 0; i < 3; i++) await f.event("click");
+			};
+			await love();
+			await f.advance(2000);
+			await love();
+			assert.equal(f.button.dataset.reaction, "cuddle");
+			await interrupt(f);
+			assert.equal(f.button.dataset.reaction, "rest");
+			await f.advance(4000);
+			await resume(f);
+			await love();
+			assert.equal(f.button.dataset.reaction, "loved");
+		});
+	}
+	await fixture(async ({ button, event, character, released }) => {
+		await character("inky");
+		await event("pointerdown");
+		await event("pointermove", { screenX: 120 });
+		button.setPointerCapture(1);
+		assert.equal(button.dataset.reaction, "grabbed");
+		await character("sprout");
+		assert.equal(button.hasPointerCapture(1), false);
+		assert.equal(button.dataset.reaction, "rest");
+		await event("pointerup");
+		assert.equal(released(), null);
+	});
+});
+
+test("reduced motion skips Inky discoveries and cuddles without losing sleep", async () => {
+	await fixture(async ({ button, event, advance, character, reduceMotion }) => {
+		await character("inky");
+		await advance(90_000);
+		await event("click");
+		await advance(28_000);
+		assert.equal(button.dataset.reaction, "bubbles");
+		await reduceMotion(true);
+		assert.equal(button.dataset.reaction, "rest");
+		for (let i = 0; i < 2; i++) {
+			await advance(2000);
+			for (let tap = 0; tap < 3; tap++) await event("click");
+			assert.equal(button.dataset.reaction, "loved");
+		}
+		await advance(89_999);
+		assert.equal(button.dataset.reaction, "rest");
+		await advance(1);
+		assert.equal(button.dataset.reaction, "dozing");
+		assert.equal(timers.size, 0);
 	});
 });
 

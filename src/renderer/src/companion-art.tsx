@@ -35,7 +35,11 @@ export type CompanionReaction =
 	| "peekaboo"
 	| "peeking"
 	| "found"
-	| "playful";
+	| "playful"
+	| "bubbles"
+	| "leafplay"
+	| "shell"
+	| "cuddle";
 
 const artwork: Record<BuiltinCompanionCharacter, string> = {
 	sprout,
@@ -961,9 +965,11 @@ export function CompanionArt({
 	const sleeping = expressionMood === "idle" && reaction === "dozing";
 	const sprite =
 		expressionMood === "idle" &&
-		["peekaboo", "peeking", "found", "playful", "dozing", "waking"].includes(
+		(["peekaboo", "peeking", "found", "playful", "dozing", "waking"].includes(
 			reaction,
-		);
+		) ||
+			(character === "inky" &&
+				["bubbles", "leafplay", "shell", "cuddle"].includes(reaction)));
 	const face = useFaceAnimation(lively, character, reaction === "listening");
 	const interacting = reaction !== "rest" && reaction !== "dozing" && !vignette;
 	const x = reaction === "listening" ? -0.55 : interacting ? gaze.x : 0;

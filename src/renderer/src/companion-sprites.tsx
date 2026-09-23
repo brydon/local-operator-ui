@@ -3,9 +3,13 @@ import { type CSSProperties, useState } from "react";
 import hoodieNap from "./assets/companions/hoodie-nap.png";
 import hoodiePeekaboo from "./assets/companions/hoodie-peekaboo.png";
 import hoodiePlay from "./assets/companions/hoodie-play.png";
+import inkyBubbles from "./assets/companions/inky-bubbles.png";
+import inkyCuddle from "./assets/companions/inky-cuddle.png";
+import inkyLeafplay from "./assets/companions/inky-leafplay.png";
 import inkyNap from "./assets/companions/inky-nap.png";
 import inkyPeekaboo from "./assets/companions/inky-peekaboo.png";
 import inkyPlay from "./assets/companions/inky-play.png";
+import inkyShell from "./assets/companions/inky-shell.png";
 import pixelNap from "./assets/companions/pixel-nap.png";
 import pixelPeekaboo from "./assets/companions/pixel-peekaboo.png";
 import pixelPlay from "./assets/companions/pixel-play.png";
@@ -21,7 +25,35 @@ export type CompanionSpriteAction =
 	| "found"
 	| "playful"
 	| "dozing"
-	| "waking";
+	| "waking"
+	| keyof typeof inkyStories;
+
+const inkyStories = {
+	bubbles: {
+		source: inkyBubbles,
+		offsets: [-0.9, -0.9, -0.66, -0.66, -0.88, -0.88, -0.88, -0.88],
+		x: 1.26,
+		scale: "1.014, 1.041",
+	},
+	leafplay: {
+		source: inkyLeafplay,
+		offsets: [0.25, 0.25, 0.01, 0.01, 1.71, 1.71, 1.71, 1.71],
+		x: 0.94,
+		scale: "1.04, 1.068",
+	},
+	shell: {
+		source: inkyShell,
+		offsets: [-1.48, -1.7, -1.7, -1.7, -1.7, -1.7, -1.7, -1.7],
+		x: 0.89,
+		scale: "0.989, 1.001",
+	},
+	cuddle: {
+		source: inkyCuddle,
+		offsets: [-0.88, -0.65, -0.88, -0.88, -0.41, -0.41, -0.87, -1.11],
+		x: -0.11,
+		scale: "0.981, 1.039",
+	},
+};
 
 const sheets = {
 	sprout: { peekaboo: sproutPeekaboo, playful: sproutPlay, nap: sproutNap },
@@ -82,24 +114,31 @@ export function CompanionSprite({
 	action,
 }: { character: BuiltinCompanionCharacter; action: CompanionSpriteAction }) {
 	const [ready, setReady] = useState(false);
+	const story =
+		character === "inky" && action in inkyStories
+			? inkyStories[action as keyof typeof inkyStories]
+			: undefined;
 	const sheet =
 		action === "dozing" || action === "waking"
 			? "nap"
-			: action === "peeking" || action === "found"
-				? "peekaboo"
-				: action;
+			: action === "playful"
+				? "playful"
+				: "peekaboo";
 	const registration = Object.fromEntries(
-		offsets[character][sheet].map((y, i) => [
+		(story?.offsets ?? offsets[character][sheet]).map((y, i) => [
 			`--sprite-offset-${i}`,
-			i === 7
-				? restingRegistration[character][sheet]
-				: `translate(${sheet === "nap" && i === 4 ? (character === "hoodie" ? -3 : character === "pixel" ? -1.5 : 0) : 0}%, ${y}%)`,
+			story
+				? `translate(${story.x}%, ${y}%) scale(${story.scale})`
+				: i === 7
+					? restingRegistration[character][sheet]
+					: `translate(${sheet === "nap" && i === 4 ? (character === "hoodie" ? -3 : character === "pixel" ? -1.5 : 0) : 0}%, ${y}%)`,
 		]),
 	) as CSSProperties;
 	return (
 		<span
 			className={cn("companion-sprite")}
 			data-action={action}
+			data-story={story ? action : undefined}
 			data-ready={ready || undefined}
 			style={registration}
 		>
@@ -107,7 +146,7 @@ export function CompanionSprite({
 				<span className={cn("companion-sprite-frame")}>
 					<img
 						className={cn("companion-sprite-sheet")}
-						src={sheets[character][sheet]}
+						src={story?.source ?? sheets[character][sheet]}
 						alt=""
 						draggable={false}
 						onLoad={() => setReady(true)}

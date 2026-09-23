@@ -102,6 +102,7 @@ function Companion() {
 	const interaction = useCompanionInteraction(
 		state.mood,
 		chat.open || play.scene !== null,
+		appearance.id,
 	);
 	const playing = play.scene !== null;
 	useEffect(() => window.companion.onPlay(play.start), [play.start]);
@@ -157,15 +158,17 @@ function Companion() {
 	].find((source) => source && !failedImages.includes(source));
 	const acknowledgment = play.scene
 		? play.announcement
-		: reaction === "loved"
-			? `${appearance.name} sends you a heart.`
-			: reaction === "starstruck"
-				? `${appearance.name} lights up with delight.`
-				: reaction === "happy"
-					? `${appearance.name} looks happy.`
-					: reaction === "found"
-						? `You found ${appearance.name}.`
-						: "";
+		: reaction === "cuddle"
+			? `${appearance.name} gives you a little hug.`
+			: reaction === "loved"
+				? `${appearance.name} sends you a heart.`
+				: reaction === "starstruck"
+					? `${appearance.name} lights up with delight.`
+					: reaction === "happy"
+						? `${appearance.name} looks happy.`
+						: reaction === "found"
+							? `You found ${appearance.name}.`
+							: "";
 	const playHint = play.scene
 		? play.scene.kind === "guess"
 			? "Choose the left or right hand. Click a side or use Left or Right. Escape ends play."

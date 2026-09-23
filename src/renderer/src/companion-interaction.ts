@@ -18,11 +18,16 @@ type DelightReaction =
 	| "peekaboo"
 	| "peeking"
 	| "found"
-	| "playful";
+	| "playful"
+	| "bubbles"
+	| "leafplay"
+	| "shell"
+	| "cuddle";
 
 export function useCompanionInteraction(
 	mood: CompanionMood = "idle",
 	chatOpen = false,
+	character = "sprout",
 ) {
 	const [hovered, setHovered] = useState(false);
 	const [focused, setFocused] = useState(false);
@@ -56,6 +61,8 @@ export function useCompanionInteraction(
 	const attention = useRef({ hovered: false, focused: false });
 	const ambient = useRef<DelightReaction | null>(null);
 	const nextScene = useRef(0);
+	const cuddles = useRef(0);
+	const currentCharacter = useRef(character);
 	const reducedMotion = useRef(false);
 	const sleeping = useRef(false);
 	const chatVisible = useRef(chatOpen);
@@ -81,7 +88,10 @@ export function useCompanionInteraction(
 				reaction === "daydream" ||
 				reaction === "peekaboo" ||
 				reaction === "peeking" ||
-				reaction === "playful"
+				reaction === "playful" ||
+				reaction === "bubbles" ||
+				reaction === "leafplay" ||
+				reaction === "shell"
 					? reaction
 					: null;
 			setDelight(reaction);
@@ -132,8 +142,33 @@ export function useCompanionInteraction(
 							}
 							return;
 						}
-						const scene = nextScene.current % 4;
-						const duration = scene === 0 ? 4800 : scene === 2 ? 4000 : 2600;
+						const hour = new Date().getHours();
+						const timeOfDay =
+							hour >= 5 && hour <= 10
+								? "stretching"
+								: hour >= 11 && hour <= 20
+									? "daydream"
+									: "yawning";
+						const scenes: DelightReaction[] =
+							currentCharacter.current === "inky"
+								? [
+										"peekaboo",
+										timeOfDay,
+										"bubbles",
+										"daydream",
+										"leafplay",
+										"playful",
+										"shell",
+										timeOfDay,
+									]
+								: ["peekaboo", timeOfDay, "playful", "daydream"];
+						const scene = scenes[nextScene.current % scenes.length];
+						const duration =
+							scene === "peekaboo"
+								? 4800
+								: ["playful", "bubbles", "leafplay", "shell"].includes(scene)
+									? 4000
+									: 2600;
 						if (
 							!origin.current &&
 							!attention.current.hovered &&
@@ -141,23 +176,7 @@ export function useCompanionInteraction(
 							!reducedMotion.current &&
 							remaining >= duration
 						) {
-							const hour = new Date().getHours();
-							const timeOfDay =
-								hour >= 5 && hour <= 10
-									? "stretching"
-									: hour >= 11 && hour <= 20
-										? "daydream"
-										: "yawning";
-							play(
-								scene === 0
-									? "peekaboo"
-									: scene === 2
-										? "playful"
-										: scene === 1
-											? timeOfDay
-											: "daydream",
-								duration,
-							);
+							play(scene, duration);
 							nextScene.current++;
 						}
 						schedule();
@@ -195,6 +214,17 @@ export function useCompanionInteraction(
 				play("starstruck", 1700);
 				return;
 			}
+		}
+		if (
+			currentCharacter.current === "inky" &&
+			(currentMood.current === "idle" || currentMood.current === "complete") &&
+			!chatVisible.current &&
+			!document.hidden &&
+			!reducedMotion.current &&
+			++cuddles.current % 2 === 0
+		) {
+			play("cuddle", 4000);
+			return;
 		}
 		play("loved", 1200);
 	}, [play]);
@@ -234,6 +264,7 @@ export function useCompanionInteraction(
 		attention.current = { hovered: false, focused: false };
 		ambient.current = null;
 		sleeping.current = false;
+		if (currentCharacter.current === "inky") cuddles.current = 0;
 		if (gesture?.target.hasPointerCapture(gesture.pointerId))
 			gesture.target.releasePointerCapture(gesture.pointerId);
 	}, [cancelFrame, clear]);
@@ -314,10 +345,24 @@ export function useCompanionInteraction(
 		return () => preference.removeEventListener("change", sync);
 	}, [cancelAmbient]);
 	useEffect(() => {
+		if (currentCharacter.current === character) return;
+		currentCharacter.current = character;
+		nextScene.current = 0;
+		cuddles.current = 0;
+		lastLovedAt.current = Number.NEGATIVE_INFINITY;
+		lastPetAt.current = Number.NEGATIVE_INFINITY;
+		reset();
+	}, [character, reset]);
+	useEffect(() => {
 		currentMood.current = mood;
 		chatVisible.current = chatOpen;
 		rub.current = null;
 		if (chatOpen || (mood !== "idle" && mood !== "complete")) {
+			if (currentCharacter.current === "inky") {
+				cuddles.current = 0;
+				affection.current = [];
+				taps.current.count = 0;
+			}
 			clear("reaction");
 			setDelight(null);
 			if (origin.current) {

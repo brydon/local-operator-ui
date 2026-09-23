@@ -129,6 +129,17 @@
 	--sprite-motion: companion-sprite-play-motion;
 }
 
+.companion-art:has(.companion-sprite[data-story]) {
+	--sprite-duration: 4000ms;
+	--sprite-animation: companion-sprite-story;
+	--sprite-underlay: companion-sprite-playful-underlay;
+	--sprite-motion: none;
+}
+
+.companion-art:has(.companion-sprite[data-story="cuddle"]) {
+	--sprite-animation: companion-sprite-cuddle;
+}
+
 @keyframes companion-sprite-playful {
 	0% {
 		--sprite-cell: translate(0%, 0%);
@@ -161,6 +172,92 @@
 		--sprite-registration: var(--sprite-offset-6);
 	}
 	74% {
+		--sprite-cell: translate(-75%, -50%);
+		--sprite-registration: var(--sprite-offset-7);
+	}
+	88%,
+	100% {
+		--sprite-cell: translate(-75%, -50%);
+		--sprite-registration: var(--sprite-offset-7);
+		opacity: 0;
+	}
+}
+
+@keyframes companion-sprite-story {
+	0% {
+		--sprite-cell: translate(0%, 0%);
+		--sprite-registration: var(--sprite-offset-0);
+		opacity: 0;
+	}
+	10% {
+		--sprite-cell: translate(-25%, 0%);
+		--sprite-registration: var(--sprite-offset-1);
+		opacity: 1;
+	}
+	20% {
+		--sprite-cell: translate(-50%, 0%);
+		--sprite-registration: var(--sprite-offset-2);
+	}
+	32% {
+		--sprite-cell: translate(-75%, 0%);
+		--sprite-registration: var(--sprite-offset-3);
+	}
+	46% {
+		--sprite-cell: translate(0%, -50%);
+		--sprite-registration: var(--sprite-offset-4);
+	}
+	58% {
+		--sprite-cell: translate(-25%, -50%);
+		--sprite-registration: var(--sprite-offset-5);
+	}
+	70% {
+		--sprite-cell: translate(-50%, -50%);
+		--sprite-registration: var(--sprite-offset-6);
+	}
+	80% {
+		--sprite-cell: translate(-75%, -50%);
+		--sprite-registration: var(--sprite-offset-7);
+	}
+	88%,
+	100% {
+		--sprite-cell: translate(-75%, -50%);
+		--sprite-registration: var(--sprite-offset-7);
+		opacity: 0;
+	}
+}
+
+@keyframes companion-sprite-cuddle {
+	0% {
+		--sprite-cell: translate(0%, 0%);
+		--sprite-registration: var(--sprite-offset-0);
+		opacity: 0;
+	}
+	10% {
+		--sprite-cell: translate(-25%, 0%);
+		--sprite-registration: var(--sprite-offset-1);
+		opacity: 1;
+	}
+	20% {
+		--sprite-cell: translate(-50%, 0%);
+		--sprite-registration: var(--sprite-offset-2);
+	}
+	30% {
+		--sprite-cell: translate(-75%, 0%);
+		--sprite-registration: var(--sprite-offset-3);
+	}
+	42% {
+		--sprite-cell: translate(0%, -50%);
+		--sprite-registration: var(--sprite-offset-4);
+	}
+	52% {
+		--sprite-cell: translate(-25%, -50%);
+		--sprite-registration: var(--sprite-offset-5);
+	}
+	71% {
+		--sprite-cell: translate(-50%, -50%);
+		--sprite-registration: var(--sprite-offset-6);
+	}
+	80% {
 		--sprite-cell: translate(-75%, -50%);
 		--sprite-registration: var(--sprite-offset-7);
 	}
