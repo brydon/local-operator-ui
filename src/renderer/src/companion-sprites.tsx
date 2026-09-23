@@ -1,6 +1,5 @@
 import { cn } from "@shared/lib/utils";
 import { type CSSProperties, useState } from "react";
-import type { BuiltinCompanionCharacter } from "../../shared/companion-skin";
 import hoodieNap from "./assets/companions/hoodie-nap.png";
 import hoodiePaperboat from "./assets/companions/hoodie-paperboat.png";
 import hoodiePeekaboo from "./assets/companions/hoodie-peekaboo.png";
@@ -29,6 +28,7 @@ import sproutNap from "./assets/companions/sprout-nap.png";
 import sproutPeekaboo from "./assets/companions/sprout-peekaboo.png";
 import sproutPlay from "./assets/companions/sprout-play.png";
 import sproutSpin from "./assets/companions/sprout-spin.png";
+import type { BuiltinCompanionCharacter } from "./companion-art";
 import { type CompanionScene, getCompanionScene } from "./companion-scenes";
 import "./companion-sprites.css";
 
