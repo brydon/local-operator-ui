@@ -282,6 +282,16 @@ test("touch and task interruptions resume variety instead of resetting the face"
 			assert.equal(timers.size, 1);
 		}
 		assert.notEqual(await step(), before);
+		await render({ character: "pixel" });
+		assert.equal(emotion(), "warm");
+		await step();
+		assert.notEqual(emotion(), "warm");
+		await render({ character: "sprout" });
+		assert.equal(
+			emotion(),
+			"warm",
+			"switching between pets with the same seed resets their expression",
+		);
 		await render({ character: "hoodie" });
 		assert.equal(emotion(), "little smile");
 		assert.equal(timers.size, 1);

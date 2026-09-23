@@ -489,12 +489,8 @@ const faceHabits: Record<
 	},
 };
 
-function useFaceAnimation(
-	enabled: boolean,
-	character: BuiltinCompanionCharacter,
-	listening: boolean,
-) {
-	const seed = faceBeats.findIndex(
+function initialFace(character: BuiltinCompanionCharacter) {
+	return faceBeats.findIndex(
 		(beat) =>
 			beat.name ===
 			(character === "hoodie"
@@ -503,16 +499,25 @@ function useFaceAnimation(
 					? "soft smile"
 					: "warm"),
 	);
+}
+
+function useFaceAnimation(
+	enabled: boolean,
+	character: BuiltinCompanionCharacter,
+	listening: boolean,
+) {
+	const seed = initialFace(character);
 	const [index, setIndex] = useState(seed);
 	const [paused, setPaused] = useState(false);
 	const [changing, setChanging] = useState(false);
 	const cursor = useRef(seed);
 	const recent = useRef([seed]);
 	useEffect(() => {
-		cursor.current = seed;
-		recent.current = [seed];
-		setIndex(seed);
-	}, [seed]);
+		const first = initialFace(character);
+		cursor.current = first;
+		recent.current = [first];
+		setIndex(first);
+	}, [character]);
 	useEffect(() => {
 		const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
 		let timer: number | undefined;

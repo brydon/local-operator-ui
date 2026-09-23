@@ -1,7 +1,6 @@
 .companion-art {
 	--companion-art-light: #c8fbd7;
 	--companion-art-breath: 4.8s;
-	--companion-art-blink: 6.4s;
 	--companion-art-affection: 1050ms;
 	--companion-art-wriggle: 1.9s;
 	--companion-art-sleep-pose: translateY(5px) rotate(-2deg) scale(1.045, 0.86);
@@ -22,7 +21,6 @@
 
 .companion-art-hoodie {
 	--companion-art-breath: 5.4s;
-	--companion-art-blink: 7.2s;
 	--companion-art-affection: 1150ms;
 	--companion-art-wriggle: 2s;
 	--companion-art-sleep-pose: translateY(5px) rotate(-9deg) scale(0.96, 0.93);
@@ -31,7 +29,6 @@
 
 .companion-art-pixel {
 	--companion-art-breath: 5.6s;
-	--companion-art-blink: 5.8s;
 	--companion-art-affection: 900ms;
 	--companion-art-wriggle: 1.7s;
 	--companion-art-sleep-pose: translateY(3px) rotate(2deg) scaleY(0.92);
@@ -41,7 +38,6 @@
 
 .companion-art-inky {
 	--companion-art-breath: 5.2s;
-	--companion-art-blink: 6.8s;
 	--companion-art-affection: 1200ms;
 	--companion-art-wriggle: 2.2s;
 	--companion-art-sleep-pose: translateY(4px) scale(1.07, 0.85);
@@ -731,11 +727,6 @@
 	animation: companion-art-task-look 8.6s ease-in-out infinite;
 }
 
-.companion-art[data-expression="idle"][data-reaction="listening"]
-	.companion-art-eyes {
-	animation: companion-art-blink var(--companion-art-blink) ease-in-out infinite;
-}
-
 .companion-art-hearts {
 	position: absolute;
 	inset: 0;
@@ -1163,18 +1154,6 @@
 	}
 	100% {
 		transform: translateY(-3px);
-	}
-}
-
-@keyframes companion-art-blink {
-	0%,
-	46%,
-	50%,
-	100% {
-		transform: scaleY(1);
-	}
-	48% {
-		transform: scaleY(0.1);
 	}
 }
 
