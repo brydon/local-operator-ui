@@ -1061,7 +1061,14 @@ export function CompanionArt({
 	gaze,
 	reaction,
 }: CompanionArtProps) {
-	const [motionReady, setMotionReady] = useState(false);
+	const [motionReadyFor, setMotionReadyFor] =
+		useState<BuiltinCompanionCharacter | null>(null);
+	const motionSource =
+		character === "hoodie"
+			? hoodieMotion
+			: character === "inky"
+				? inkyMotion
+				: undefined;
 	const previousMood = useRef(mood);
 	const [celebrating, setCelebrating] = useState(false);
 	useEffect(() => {
@@ -1107,12 +1114,9 @@ export function CompanionArt({
 		"--companion-art-gaze-y": `${y * 4}px`,
 		"--companion-art-tilt": `${x * 2 + 1.5}deg`,
 		"--companion-art-lean": `${x * 6}deg`,
-		"--companion-art-sheet":
-			character === "hoodie"
-				? `url("${hoodieMotion}")`
-				: character === "inky"
-					? `url("${inkyMotion}")`
-					: undefined,
+		"--companion-art-sheet": motionSource
+			? `url("${motionSource}")`
+			: undefined,
 	} as CSSProperties;
 	return (
 		<span
@@ -1122,7 +1126,7 @@ export function CompanionArt({
 			data-expression={expressionMood}
 			data-reaction={reaction}
 			data-physical={physical || undefined}
-			data-motion-ready={character === "inky" && motionReady ? true : undefined}
+			data-motion-ready={motionReadyFor === character || undefined}
 			data-vignette={vignette || undefined}
 			data-sleeping={sleeping || undefined}
 			data-celebrating={celebrating || undefined}
@@ -1130,12 +1134,13 @@ export function CompanionArt({
 			data-paused={face.paused || undefined}
 			style={tracking}
 		>
-			{character === "inky" && (
+			{motionSource && (
 				<img
+					key={character}
 					className={cn("companion-art-motion-source")}
-					src={inkyMotion}
+					src={motionSource}
 					alt=""
-					onLoad={() => setMotionReady(true)}
+					onLoad={() => setMotionReadyFor(character)}
 				/>
 			)}
 			<span className={cn("companion-art-pose")}>

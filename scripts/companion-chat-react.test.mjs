@@ -142,7 +142,7 @@ test("collapse preserves drafts and pending sends cannot be duplicated", async (
 });
 
 for (const moveFocus of [false, true]) {
-	test(`send completion ${moveFocus ? "preserves another control's focus" : "returns focus to the input"}`, async (t) => {
+	test(`send ${moveFocus ? "preserves later focus changes" : "focuses the input before disabling its button"}`, async (t) => {
 		const pending = deferred();
 		const { input, button, type, submit } = await mount(t, {
 			onSend: () => pending.promise,
@@ -150,6 +150,8 @@ for (const moveFocus of [false, true]) {
 		await type("One message");
 		button("Send message").focus();
 		await act(() => submit());
+		assert.equal(document.activeElement, input);
+		assert.equal(button("Send message").disabled, true);
 		const expand = button("Open chat in the full app");
 		if (moveFocus) expand.focus();
 		await act(() => pending.resolve(true));
@@ -184,6 +186,25 @@ test("failed delivery retains the draft and displays the service error", async (
 		"Check chat before trying again.",
 	);
 	assert.equal(button("Send message").disabled, true);
+});
+
+test("a chat creation failure can open the app before a session exists", async (t) => {
+	let expanded = 0;
+	const { input, button, type } = await mount(t, {
+		snapshot: {
+			...idle,
+			sessionId: null,
+			status: "error",
+			error: "Chat could not start. Try again or open the app.",
+		},
+		onExpand: () => expanded++,
+	});
+	await type("Keep this draft");
+	assert.equal(button("New chat"), null);
+	assert.equal(button("Open chat in the full app").disabled, false);
+	await act(() => button("Open chat in the full app").click());
+	assert.equal(expanded, 1);
+	assert.equal(input.value, "Keep this draft");
 });
 
 test("Enter sends, Shift+Enter adds a line, and IME ignores Enter and Escape", async (t) => {

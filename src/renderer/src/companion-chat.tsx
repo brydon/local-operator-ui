@@ -70,6 +70,9 @@ export function CompanionChat({
 		const text = submittedDraft.trim();
 		if (!text || !canSend || inFlight.current) return;
 		inFlight.current = true;
+		if (document.activeElement === sendButton.current) {
+			composer.current?.focus({ preventScroll: true });
+		}
 		setSending(true);
 		setSendError(null);
 		try {
@@ -83,9 +86,6 @@ export function CompanionChat({
 		} finally {
 			inFlight.current = false;
 			setSending(false);
-			if (document.activeElement === sendButton.current) {
-				composer.current?.focus({ preventScroll: true });
-			}
 		}
 	}
 
@@ -210,36 +210,34 @@ export function CompanionChat({
 					/>
 					<div className={cn("flex min-h-8 shrink-0 items-center gap-0.5")}>
 						{snapshot.sessionId && (
-							<>
-								<Button
-									type="button"
-									variant="ghost"
-									size="icon-sm"
-									className={cn("h-7 w-6")}
-									aria-label="New chat"
-									title="New chat"
-									disabled={busy}
-									onClick={() => {
-										setSendError(null);
-										onNewChat();
-										composer.current?.focus({ preventScroll: true });
-									}}
-								>
-									<Plus size={14} aria-hidden="true" />
-								</Button>
-								<Button
-									type="button"
-									variant="ghost"
-									size="icon-sm"
-									className={cn("h-7 w-6")}
-									aria-label="Open chat in the full app"
-									title="Open in the full app"
-									onClick={onExpand}
-								>
-									<ArrowUpRight size={14} aria-hidden="true" />
-								</Button>
-							</>
+							<Button
+								type="button"
+								variant="ghost"
+								size="icon-sm"
+								className={cn("h-7 w-6")}
+								aria-label="New chat"
+								title="New chat"
+								disabled={busy}
+								onClick={() => {
+									setSendError(null);
+									onNewChat();
+									composer.current?.focus({ preventScroll: true });
+								}}
+							>
+								<Plus size={14} aria-hidden="true" />
+							</Button>
 						)}
+						<Button
+							type="button"
+							variant="ghost"
+							size="icon-sm"
+							className={cn("h-7 w-6")}
+							aria-label="Open chat in the full app"
+							title="Open in the full app"
+							onClick={onExpand}
+						>
+							<ArrowUpRight size={14} aria-hidden="true" />
+						</Button>
 						<Button
 							ref={sendButton}
 							type="submit"

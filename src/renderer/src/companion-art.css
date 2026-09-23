@@ -326,11 +326,11 @@
 	animation-delay: -210ms;
 }
 
-.companion-art-hoodie[data-physical] .companion-art-body {
+.companion-art-hoodie[data-motion-ready][data-physical] .companion-art-body {
 	visibility: hidden;
 }
 
-.companion-art-hoodie[data-physical] .companion-art-sprite {
+.companion-art-hoodie[data-motion-ready][data-physical] .companion-art-sprite {
 	display: block;
 	clip-path: inset(3% 0 1%);
 	background-image: var(--companion-art-sheet);
@@ -339,7 +339,7 @@
 	transform-origin: 50% 95%;
 }
 
-.companion-art-hoodie[data-physical] .companion-art-face {
+.companion-art-hoodie[data-motion-ready][data-physical] .companion-art-face {
 	left: 34%;
 	top: 31%;
 	width: 32%;
@@ -347,39 +347,46 @@
 	transform: rotate(-5deg);
 }
 
-.companion-art-hoodie[data-reaction="struggling"] .companion-art-sprite {
+.companion-art-hoodie[data-motion-ready][data-reaction="struggling"]
+	.companion-art-sprite {
 	animation: companion-art-hoodie-kick var(--companion-art-wriggle)
 		steps(1, end) infinite;
 }
 
-.companion-art-hoodie[data-reaction="struggling"] .companion-art-face {
+.companion-art-hoodie[data-motion-ready][data-reaction="struggling"]
+	.companion-art-face {
 	animation: companion-art-hoodie-look var(--companion-art-wriggle)
 		steps(1, end) infinite;
 }
 
-.companion-art-hoodie[data-reaction="falling"] .companion-art-sprite {
+.companion-art-hoodie[data-motion-ready][data-reaction="falling"]
+	.companion-art-sprite {
 	background-position: 0 100%;
 }
 
-.companion-art-hoodie[data-reaction="falling"] .companion-art-face {
+.companion-art-hoodie[data-motion-ready][data-reaction="falling"]
+	.companion-art-face {
 	left: 35%;
 	top: 31%;
 	transform: none;
 }
 
-.companion-art-hoodie[data-reaction="landing"] .companion-art-sprite {
+.companion-art-hoodie[data-motion-ready][data-reaction="landing"]
+	.companion-art-sprite {
 	background-position: 33.333333% 100%;
 	animation: companion-art-hoodie-land 520ms steps(1, end) forwards;
 }
 
-.companion-art-hoodie[data-reaction="landing"] .companion-art-face {
+.companion-art-hoodie[data-motion-ready][data-reaction="landing"]
+	.companion-art-face {
 	left: 35%;
 	top: 41%;
 	transform: none;
 	animation: companion-art-hoodie-settle 520ms steps(1, end) forwards;
 }
 
-.companion-art-hoodie[data-reaction="landing"] .companion-art-body {
+.companion-art-hoodie[data-motion-ready][data-reaction="landing"]
+	.companion-art-body {
 	visibility: visible;
 	animation: companion-art-hoodie-restore 520ms ease-out forwards;
 }
@@ -1558,7 +1565,8 @@
 		transform: translateY(11%) scale(1.2);
 	}
 
-	.companion-art-hoodie[data-reaction="landing"] .companion-art-body {
+	.companion-art-hoodie[data-motion-ready][data-reaction="landing"]
+		.companion-art-body {
 		visibility: hidden;
 	}
 }
