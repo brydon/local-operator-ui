@@ -85,12 +85,10 @@ function Companion() {
 		const preference = window.matchMedia("(prefers-reduced-motion: reduce)");
 		const sync = () => window.companion.setReducedMotion(preference.matches);
 		preference.addEventListener("change", sync);
-		document.addEventListener("visibilitychange", sync);
 		sync();
 		return () => {
 			unsubscribe();
 			preference.removeEventListener("change", sync);
-			document.removeEventListener("visibilitychange", sync);
 		};
 	}, []);
 	const lastGesture = useRef<"tap" | "drag" | null>(null);
@@ -185,6 +183,9 @@ function Companion() {
 							return;
 						interaction.handlers.onPointerDown(event);
 						event.currentTarget.setPointerCapture(event.pointerId);
+						window.companion.setReducedMotion(
+							window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+						);
 						window.companion.drag("start");
 					}}
 					onPointerMove={(event) => {
