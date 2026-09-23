@@ -913,7 +913,81 @@ test("window activation before a click preserves the wake animation", async () =
 			await advance(799);
 			assert.equal(button.dataset.reaction, "waking");
 			await advance(1);
-			assert.equal(button.dataset.reaction, "curious");
+			assert.equal(button.dataset.reaction, keyboard ? "curious" : "rest");
+		});
+	}
+});
+
+test("pointer focus yields to rest and keyboard use restores engagement without refocusing", async () => {
+	await fixture(async ({ button, event, advance }) => {
+		await event("pointerover");
+		await event("pointerdown");
+		await act(async () => button.focus());
+		await event("pointerup");
+		await event("pointerout");
+		await advance(1200);
+		assert.equal(document.activeElement, button);
+		assert.equal(button.dataset.engaged, "false");
+		assert.equal(button.dataset.reaction, "rest");
+		await advance(26_800);
+		assert.equal(button.dataset.reaction, "peekaboo");
+		await advance(4800);
+		await event("keydown");
+		assert.equal(button.dataset.engaged, "true");
+		assert.equal(button.dataset.reaction, "curious");
+		await advance(57_200);
+		assert.equal(button.dataset.reaction, "dozing");
+		assert.equal(button.dataset.engaged, "false");
+	});
+});
+
+test("returning focus after a pointer chat collapse does not block quiet opportunities", async () => {
+	await fixture(async ({ button, chat, advance }) => {
+		const matches = button.matches.bind(button);
+		button.matches = (selector) =>
+			selector === ":focus-visible" ? false : matches(selector);
+		await chat(true);
+		await chat(false);
+		await act(async () => button.focus());
+		assert.equal(document.activeElement, button);
+		assert.equal(button.dataset.engaged, "false");
+		await advance(28_000);
+		assert.equal(button.dataset.reaction, "peekaboo");
+	});
+});
+
+test("window deactivation preserves sleep even when element blur arrives first", async () => {
+	for (const elementFirst of [false, true]) {
+		await fixture(async ({ button, event, advance }) => {
+			await act(async () => button.focus());
+			await advance(90_000);
+			assert.equal(button.dataset.reaction, "dozing");
+			assert.equal(button.dataset.engaged, "false");
+			const hasFocus = document.hasFocus;
+			try {
+				document.hasFocus = () => false;
+				if (elementFirst) await act(async () => button.blur());
+				await act(async () =>
+					window.dispatchEvent(new dom.window.Event("blur")),
+				);
+				assert.equal(button.dataset.reaction, "dozing");
+				assert.equal(timers.size, 0);
+				await act(async () =>
+					window.dispatchEvent(new dom.window.Event("focus")),
+				);
+				assert.equal(button.dataset.reaction, "dozing");
+				if (elementFirst) {
+					const matches = button.matches.bind(button);
+					button.matches = (selector) =>
+						selector === ":focus-visible" ? false : matches(selector);
+					await act(async () => button.focus());
+					assert.equal(button.dataset.reaction, "dozing");
+				}
+				await event("click");
+				assert.equal(button.dataset.reaction, "waking");
+			} finally {
+				document.hasFocus = hasFocus;
+			}
 		});
 	}
 });

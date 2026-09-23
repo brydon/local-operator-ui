@@ -45,7 +45,7 @@ body {
 	opacity: 1;
 	transition-delay: 180ms;
 }
-.companion-pet:focus-within .companion-chat-toggle {
+.companion-pet:has(:focus-visible) .companion-chat-toggle {
 	visibility: visible;
 	opacity: 1;
 	transition-delay: 0s;

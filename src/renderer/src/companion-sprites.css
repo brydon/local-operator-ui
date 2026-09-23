@@ -2,14 +2,15 @@
 	position: absolute;
 	inset: 0;
 	overflow: hidden;
-	opacity: 0;
+	opacity: 1;
+	visibility: hidden;
 	pointer-events: none;
+	animation: var(--sprite-animation) var(--sprite-duration) steps(1, end)
+		forwards;
 }
 
 .companion-sprite[data-ready] {
-	opacity: 1;
-	animation: var(--sprite-animation) var(--sprite-duration) steps(1, end)
-		forwards;
+	visibility: visible;
 }
 
 .companion-sprite-motion,
@@ -43,16 +44,17 @@
 	image-rendering: pixelated;
 }
 
-.companion-art:has(.companion-sprite[data-ready]) .companion-art-visual {
-	opacity: 0;
+.companion-art:has(.companion-sprite) .companion-art-visual {
 	animation: var(--sprite-underlay, none) var(--sprite-duration, 0ms)
 		steps(1, end) forwards;
 }
 
-.companion-art:has(.companion-sprite[data-ready]) .companion-art-pose,
-.companion-art-inky[data-expression][data-reaction]:has(
-		.companion-sprite[data-ready]
-	)
+.companion-art:has(.companion-sprite[data-ready]) .companion-art-visual {
+	opacity: var(--sprite-base-opacity, 0);
+}
+
+.companion-art:has(.companion-sprite) .companion-art-pose,
+.companion-art-inky[data-expression][data-reaction]:has(.companion-sprite)
 	.companion-art-pose {
 	transform: none;
 	animation: var(--sprite-motion, none) var(--sprite-duration, 0ms) ease-in-out
@@ -111,14 +113,14 @@
 
 @keyframes companion-sprite-peekaboo-underlay {
 	0% {
-		opacity: 1;
+		--sprite-base-opacity: 1;
 	}
 	8% {
-		opacity: 0;
+		--sprite-base-opacity: 0;
 	}
 	88%,
 	100% {
-		opacity: 1;
+		--sprite-base-opacity: 1;
 	}
 }
 
@@ -322,14 +324,14 @@
 
 @keyframes companion-sprite-playful-underlay {
 	0% {
-		opacity: 1;
+		--sprite-base-opacity: 1;
 	}
 	10% {
-		opacity: 0;
+		--sprite-base-opacity: 0;
 	}
 	88%,
 	100% {
-		opacity: 1;
+		--sprite-base-opacity: 1;
 	}
 }
 
@@ -368,11 +370,11 @@
 
 @keyframes companion-sprite-found-underlay {
 	0% {
-		opacity: 0;
+		--sprite-base-opacity: 0;
 	}
 	88%,
 	100% {
-		opacity: 1;
+		--sprite-base-opacity: 1;
 	}
 }
 
@@ -414,30 +416,30 @@
 
 @keyframes companion-sprite-waking-underlay {
 	0% {
-		opacity: 0;
+		--sprite-base-opacity: 0;
 	}
 	92%,
 	100% {
-		opacity: 1;
+		--sprite-base-opacity: 1;
 	}
 }
 
-.companion-sprite[data-ready][data-action="peeking"] {
+.companion-sprite[data-action="peeking"] {
 	--sprite-registration: var(--sprite-offset-4);
 	--sprite-cell: translate(0, -50%);
 	animation: none;
 }
 
-.companion-sprite[data-ready][data-action="peeking"] .companion-sprite-motion {
+.companion-sprite[data-action="peeking"] .companion-sprite-motion {
 	animation: companion-sprite-peek-hold 2400ms ease-in-out both;
 }
 
-.companion-sprite[data-ready][data-action="dozing"] {
+.companion-sprite[data-action="dozing"] {
 	animation: companion-sprite-settle 900ms steps(1, end) forwards,
 		companion-sprite-sleep 22000ms steps(1, end) 900ms infinite;
 }
 
-.companion-sprite[data-ready][data-action="dozing"] .companion-sprite-motion {
+.companion-sprite[data-action="dozing"] .companion-sprite-motion {
 	animation: companion-sprite-breathe var(--companion-art-sleep-breath)
 		ease-in-out 900ms infinite;
 }
@@ -570,15 +572,11 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-	.companion-art[data-expression][data-reaction]:has(
-			.companion-sprite[data-ready]
-		)
+	.companion-art[data-expression][data-reaction]:has(.companion-sprite)
 		.companion-art-pose {
 		transform: none;
 	}
-	.companion-art[data-expression][data-reaction]:has(
-			.companion-sprite[data-ready]
-		)
+	.companion-art[data-expression][data-reaction]:has(.companion-sprite)
 		:is(
 			.companion-art-visual,
 			.companion-art-pose,

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { PointerEvent } from "react";
+import type { FocusEvent, PointerEvent } from "react";
 import {
 	COMPANION_DRAG_THRESHOLD,
 	type CompanionMood,
@@ -265,17 +265,22 @@ export function useCompanionInteraction(
 		if (gesture?.target.hasPointerCapture(gesture.pointerId))
 			gesture.target.releasePointerCapture(gesture.pointerId);
 	}, [cancelFrame, clear]);
-	const reset = useCallback(() => {
-		cleanup();
-		setPressed(false);
-		setDragging(null);
-		setDelight(null);
-		setDozing(false);
-		setHovered(false);
-		setFocused(false);
-		setGaze({ x: 0, y: 0 });
-		if (!document.hidden) wake(false);
-	}, [cleanup, wake]);
+	const reset = useCallback(
+		(preserveSleep = false) => {
+			const wasSleeping = preserveSleep && sleeping.current;
+			cleanup();
+			sleeping.current = wasSleeping;
+			setPressed(false);
+			setDragging(null);
+			setDelight(null);
+			setDozing(wasSleeping);
+			setHovered(false);
+			setFocused(false);
+			setGaze({ x: 0, y: 0 });
+			if (!document.hidden && !wasSleeping) wake(false);
+		},
+		[cleanup, wake],
+	);
 
 	function pet(event: PointerEvent<HTMLButtonElement>) {
 		const bounds = event.currentTarget.getBoundingClientRect();
@@ -372,6 +377,7 @@ export function useCompanionInteraction(
 	}, [mood, chatOpen, wake, clear]);
 	useEffect(() => {
 		const visibility = () => (document.hidden ? reset() : wake());
+		const blur = () => reset(true);
 		const focus = () => {
 			if (
 				!sleeping.current &&
@@ -380,11 +386,11 @@ export function useCompanionInteraction(
 			)
 				wake();
 		};
-		window.addEventListener("blur", reset);
+		window.addEventListener("blur", blur);
 		window.addEventListener("focus", focus);
 		document.addEventListener("visibilitychange", visibility);
 		return () => {
-			window.removeEventListener("blur", reset);
+			window.removeEventListener("blur", blur);
 			window.removeEventListener("focus", focus);
 			document.removeEventListener("visibilitychange", visibility);
 			cleanup();
@@ -407,17 +413,24 @@ export function useCompanionInteraction(
 		tap,
 		wake,
 		reset,
-		isEngaged: hovered || focused || pressed || dragging !== null,
+		isEngaged: hovered || (focused && !dozing) || pressed || dragging !== null,
 		handlers: {
-			onFocus: () => {
-				attention.current.focused = true;
-				if (!origin.current) {
+			onFocus: (event: FocusEvent<HTMLButtonElement>) => {
+				const keyboard =
+					!origin.current && event.currentTarget.matches(":focus-visible");
+				attention.current.focused = keyboard;
+				if (keyboard) {
 					if (sleeping.current) wake();
 					else approach();
 				}
+				setFocused(keyboard);
+			},
+			onBlur: (event: FocusEvent<HTMLButtonElement>) =>
+				reset(!event.relatedTarget && !document.hasFocus()),
+			onKeyDown: () => {
+				attention.current.focused = true;
 				setFocused(true);
 			},
-			onBlur: reset,
 			onPointerEnter: (event: PointerEvent<HTMLButtonElement>) => {
 				approach();
 				if (event.pointerType !== "touch") {
@@ -441,6 +454,8 @@ export function useCompanionInteraction(
 					origin.current
 				)
 					return;
+				attention.current.focused = false;
+				setFocused(false);
 				const finding =
 					ambient.current === "peekaboo" || ambient.current === "peeking";
 				const waking = sleeping.current;
@@ -534,7 +549,7 @@ export function useCompanionInteraction(
 			onLostPointerCapture: () => {
 				if (origin.current) reset();
 			},
-			onPointerCancel: reset,
+			onPointerCancel: () => reset(),
 		},
 	};
 }

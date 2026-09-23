@@ -326,6 +326,7 @@ function Companion() {
 						}
 					}}
 					onKeyDown={(event) => {
+						interaction.handlers.onKeyDown();
 						if (event.repeat && (event.key === "Enter" || event.key === " ")) {
 							event.preventDefault();
 							return;
