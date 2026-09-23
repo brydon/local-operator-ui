@@ -150,8 +150,10 @@ export interface CompanionChatView {
 }
 
 export type CompanionMotion = "rest" | "falling" | "landing";
+export type CompanionActivity = "snack" | "bounce" | "guess";
 
 export interface CompanionBridge {
+	onPlay(listener: (activity: CompanionActivity) => void): () => void;
 	onMotion(listener: (motion: CompanionMotion) => void): () => void;
 	setReducedMotion(reduced: boolean): void;
 	getChat(): Promise<CompanionChatView>;
