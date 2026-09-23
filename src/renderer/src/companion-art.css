@@ -463,8 +463,52 @@
 }
 
 .companion-art-live-mouth {
-	fill: currentColor;
-	transition: d 340ms ease 140ms;
+	fill: none;
+}
+
+.companion-art-face-arrive {
+	transform-origin: 50px 28px;
+	animation: companion-art-face-arrive 180ms ease-out;
+}
+
+@keyframes companion-art-face-arrive {
+	from {
+		transform: scaleY(0.15);
+	}
+	to {
+		transform: scaleY(1);
+	}
+}
+
+.companion-art-whistle {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	fill: none;
+	stroke: var(--companion-art-light);
+	stroke-width: 1.7;
+	stroke-linecap: round;
+}
+.companion-art-whistle path {
+	animation: companion-art-whistle 1350ms ease-out infinite;
+}
+.companion-art-whistle path + path {
+	animation-delay: 450ms;
+	opacity: 0;
+}
+@keyframes companion-art-whistle {
+	0% {
+		opacity: 0;
+		transform: translate(-2px, 3px);
+	}
+	25% {
+		opacity: 0.8;
+	}
+	100% {
+		opacity: 0;
+		transform: translate(3px, -5px);
+	}
 }
 
 .companion-art-cheeks {
@@ -1244,6 +1288,7 @@
 			.companion-art-face,
 			.companion-art-expression,
 			.companion-art-live-face,
+			.companion-art-face-arrive,
 			.companion-art-eye-left,
 			.companion-art-eye-right,
 			.companion-art-brow-left,
@@ -1272,6 +1317,7 @@
 
 	.companion-art-vignette-scene,
 	.companion-art-motes,
+	.companion-art-whistle,
 	.companion-art-glints,
 	.companion-art-hearts,
 	.companion-art-impact {

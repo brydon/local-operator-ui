@@ -60,68 +60,335 @@ interface ExpressionProps {
 	reaction: CompanionReaction;
 }
 
-const faceBeats = [
+type EyeShape =
+	| "round"
+	| "small"
+	| "line"
+	| "caret"
+	| "arch"
+	| "closed"
+	| "heart"
+	| "star"
+	| "ring"
+	| "squeeze";
+type MouthShape =
+	| "smile"
+	| "grin"
+	| "cat"
+	| "oh"
+	| "smirk"
+	| "pout"
+	| "none"
+	| "flat"
+	| "slight smile"
+	| "slight frown"
+	| "whistle";
+interface FaceBeat {
+	name: string;
+	eyes: [EyeShape, EyeShape];
+	mouth: MouthShape;
+	openness?: [number, number];
+	brows?: [number, number];
+	glance?: [number, number];
+	cheeks?: boolean;
+	duration?: number;
+	weight?: number;
+	attentive?: boolean;
+}
+
+const faceBeats: FaceBeat[] = [
+	{ name: "warm", eyes: ["round", "round"], mouth: "smile", attentive: true },
 	{
-		eyes: [1, 0.95],
-		brows: [0, 0],
-		glance: [0, 0],
-		smile: [18, 0],
-		duration: 2700,
+		name: "caret joy",
+		eyes: ["caret", "caret"],
+		mouth: "grin",
+		duration: 2300,
 	},
 	{
-		eyes: [1.12, 0.6],
+		name: "left wink",
+		eyes: ["line", "round"],
+		mouth: "smirk",
+		brows: [1, -2],
+		duration: 1900,
+		attentive: true,
+	},
+	{
+		name: "content",
+		eyes: ["line", "line"],
+		mouth: "smile",
+		duration: 2600,
+		attentive: true,
+	},
+	{
+		name: "adoring",
+		eyes: ["heart", "heart"],
+		mouth: "cat",
+		cheeks: true,
+		duration: 2100,
+		weight: 2,
+	},
+	{
+		name: "curious",
+		eyes: ["round", "small"],
+		mouth: "smile",
+		openness: [1.15, 0.9],
 		brows: [-3, 2],
-		glance: [-4, -2],
-		smile: [10, 0],
-		duration: 3100,
+		glance: [-3, -1],
+		attentive: true,
 	},
 	{
-		eyes: [0.62, 0.68],
-		brows: [-2, -2],
-		glance: [1, -1],
-		smile: [26, 15],
-		duration: 2800,
-	},
-	{
-		eyes: [0.5, 1.08],
-		brows: [2, -3],
-		glance: [4, 1],
-		smile: [14, 3],
+		name: "beaming",
+		eyes: ["arch", "arch"],
+		mouth: "grin",
+		cheeks: true,
 		duration: 2500,
 	},
 	{
-		eyes: [0.8, 0.85],
-		brows: [0, -1],
-		glance: [0, 0],
-		smile: [22, 0],
-		duration: 3400,
+		name: "right wink",
+		eyes: ["round", "line"],
+		mouth: "smile",
+		brows: [-2, 1],
+		duration: 1900,
+		attentive: true,
+	},
+	{
+		name: "starry",
+		eyes: ["star", "star"],
+		mouth: "grin",
+		duration: 1800,
+		weight: 2,
+	},
+	{
+		name: "tiny happy",
+		eyes: ["small", "small"],
+		mouth: "cat",
+		cheeks: true,
+		glance: [0, 2],
+		duration: 2500,
+	},
+	{
+		name: "skeptical",
+		eyes: ["line", "ring"],
+		mouth: "smirk",
+		brows: [2, -3],
+		glance: [3, 0],
+		duration: 1500,
+		weight: 1,
+	},
+	{
+		name: "cat smile",
+		eyes: ["caret", "caret"],
+		mouth: "cat",
+		attentive: true,
+	},
+	{
+		name: "smitten",
+		eyes: ["heart", "caret"],
+		mouth: "smile",
+		cheeks: true,
+		duration: 1900,
+		weight: 2,
+	},
+	{
+		name: "bashful",
+		eyes: ["small", "arch"],
+		mouth: "cat",
+		glance: [-2, 2],
+		cheeks: true,
+		duration: 2400,
+	},
+	{
+		name: "amazed",
+		eyes: ["ring", "ring"],
+		mouth: "oh",
+		brows: [-3, -3],
+		duration: 1400,
+		weight: 1,
+	},
+	{
+		name: "goofy",
+		eyes: ["round", "round"],
+		mouth: "smirk",
+		openness: [0.45, 1.15],
+		brows: [2, -3],
+		glance: [3, -1],
+		duration: 2200,
+	},
+	{
+		name: "giggle",
+		eyes: ["squeeze", "squeeze"],
+		mouth: "grin",
+		cheeks: true,
+		duration: 1800,
+		weight: 2,
+	},
+	{
+		name: "dreamy",
+		eyes: ["closed", "closed"],
+		mouth: "smile",
+		duration: 2600,
+	},
+	{
+		name: "twinkle",
+		eyes: ["star", "round"],
+		mouth: "smirk",
+		duration: 1900,
+		weight: 2,
+	},
+	{
+		name: "proud",
+		eyes: ["round", "round"],
+		mouth: "smirk",
+		openness: [0.55, 0.55],
+		brows: [-1, -1],
+		attentive: true,
+	},
+	{
+		name: "puzzled",
+		eyes: ["small", "ring"],
+		mouth: "oh",
+		brows: [1, -3],
+		glance: [2, -1],
+		duration: 1400,
+		weight: 1,
+	},
+	{
+		name: "soft smile",
+		eyes: ["round", "arch"],
+		mouth: "smile",
+		openness: [0.85, 1],
+		duration: 2900,
+		attentive: true,
+	},
+	{
+		name: "little pout",
+		eyes: ["small", "small"],
+		mouth: "pout",
+		brows: [2, 2],
+		duration: 1000,
+		weight: 0.5,
+	},
+	{
+		name: "sheepish",
+		eyes: ["line", "small"],
+		mouth: "cat",
+		cheeks: true,
+		brows: [0, -2],
+		duration: 2200,
+	},
+	{
+		name: "wistful",
+		eyes: ["round", "round"],
+		mouth: "pout",
+		openness: [0.65, 0.8],
+		brows: [2, -1],
+		glance: [-2, 1],
+		duration: 1100,
+		weight: 0.5,
+	},
+	{
+		name: "mischievous",
+		eyes: ["caret", "line"],
+		mouth: "smirk",
+		brows: [-2, 1],
+		duration: 2300,
+	},
+	{
+		name: "quiet",
+		eyes: ["round", "round"],
+		mouth: "none",
+		openness: [0.9, 0.9],
+		duration: 3000,
+		attentive: true,
+	},
+	{
+		name: "neutral",
+		eyes: ["round", "round"],
+		mouth: "flat",
+		openness: [0.8, 0.85],
+		duration: 2700,
+		attentive: true,
+	},
+	{
+		name: "little smile",
+		eyes: ["round", "round"],
+		mouth: "slight smile",
+		openness: [0.9, 0.85],
+		duration: 3200,
+		attentive: true,
+	},
+	{
+		name: "hmm",
+		eyes: ["round", "small"],
+		mouth: "slight frown",
+		brows: [0, -2],
+		glance: [2, 0],
+		duration: 1600,
+		weight: 1,
+	},
+	{
+		name: "whistling",
+		eyes: ["closed", "round"],
+		mouth: "whistle",
+		openness: [1, 0.6],
+		glance: [2, -1],
+		duration: 2700,
+		weight: 2,
 	},
 ];
 
 function useFaceAnimation(
 	enabled: boolean,
 	character: BuiltinCompanionCharacter,
+	listening: boolean,
 ) {
-	const seed = character === "sprout" ? 0 : character === "hoodie" ? 2 : 3;
+	const seed = character === "sprout" ? 0 : character === "hoodie" ? 7 : 11;
 	const [index, setIndex] = useState(seed);
 	const [paused, setPaused] = useState(false);
+	const cursor = useRef(seed);
+	const recent = useRef([seed]);
+	useEffect(() => {
+		cursor.current = seed;
+		recent.current = [seed];
+		setIndex(seed);
+	}, [seed]);
 	useEffect(() => {
 		const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
 		let timer: number | undefined;
-		let cursor = seed;
 		const schedule = () => {
 			timer = window.setTimeout(() => {
-				cursor = (cursor + 1) % faceBeats.length;
-				setIndex(cursor);
+				const bridge = (faceBeats[cursor.current].weight ?? 4) < 4;
+				const choices = faceBeats
+					.map((beat, i) => ({ beat, i }))
+					.filter(
+						({ beat, i }) =>
+							!recent.current.includes(i) &&
+							(!listening || beat.attentive) &&
+							(!bridge || (beat.weight ?? 4) === 4),
+					);
+				let draw =
+					Math.random() *
+					choices.reduce((sum, { beat }) => sum + (beat.weight ?? 4), 0);
+				const next =
+					choices.find(({ beat }) => {
+						draw -= beat.weight ?? 4;
+						return draw < 0;
+					}) ?? choices[0];
+				cursor.current = next.i;
+				recent.current = [...recent.current.slice(-3), next.i];
+				setIndex(next.i);
 				schedule();
-			}, faceBeats[cursor].duration);
+			}, faceBeats[cursor.current].duration ?? 2800);
 		};
 		const refresh = () => {
 			window.clearTimeout(timer);
 			const stopped = document.hidden || motion.matches;
 			setPaused(stopped);
-			cursor = seed;
-			setIndex(seed);
+			if (listening && !faceBeats[cursor.current].attentive) {
+				cursor.current = seed;
+				recent.current = [...recent.current.slice(-3), seed];
+				setIndex(seed);
+			}
 			if (enabled && !stopped) schedule();
 		};
 		refresh();
@@ -132,36 +399,95 @@ function useFaceAnimation(
 			document.removeEventListener("visibilitychange", refresh);
 			motion.removeEventListener("change", refresh);
 		};
-	}, [enabled, seed]);
+	}, [enabled, listening, seed]);
 	return { beat: faceBeats[index], index, paused };
+}
+
+function FaceEye({
+	shape,
+	pixels,
+	mirrored = false,
+}: { shape: EyeShape; pixels: boolean; mirrored?: boolean }) {
+	const paths: Partial<Record<EyeShape, [string, string]>> = {
+		line: ["M17 29h21", "M17 29h21"],
+		caret: ["M16 32l11-16 11 16", "M16 32v-6h5v-5h4v-5h5v5h4v5h5v6"],
+		arch: ["M16 31q11-22 22 0", "M16 31v-7h5v-5h12v5h5v7"],
+		closed: ["M17 25q10 14 21 0", "M17 25v5h5v4h11v-4h5v-5"],
+		squeeze: ["M18 17l14 11-14 10", "M18 17h5v5h5v6h-5v5h-5"],
+		heart: [
+			"M27 40 15 27C5 15 21 7 27 18C33 7 49 15 39 27Z",
+			"M27 40h-5v-5h-5v-5h-5V18h5v-5h7v5h6v-5h7v5h5v12h-5v5h-5v5Z",
+		],
+		star: [
+			"M27 10l5 11 12 1-9 8 3 12-11-6-11 6 3-12-9-8 12-1Z",
+			"M24 10h6v10h11v6h-6v6h3v8h-6v-5H22v5h-6v-8h3v-6h-6v-6h11Z",
+		],
+	};
+	const path = paths[shape];
+	if (path)
+		return (
+			<path
+				className={cn(
+					(shape === "heart" || shape === "star") && "companion-art-eye-fill",
+				)}
+				d={path[pixels ? 1 : 0]}
+				transform={
+					shape === "squeeze" && mirrored
+						? "translate(54 0) scale(-1 1)"
+						: undefined
+				}
+			/>
+		);
+	const small = shape === "small";
+	return (
+		<rect
+			className={cn(shape !== "ring" && "companion-art-eye-fill")}
+			x={small ? 22 : 18}
+			y={small ? 23 : 15}
+			width={small ? 11 : 19}
+			height={small ? 14 : 27}
+			rx={pixels ? 0 : small ? 5.5 : 9.5}
+		/>
+	);
 }
 
 function LivelyFace({
 	beat,
 	pixels,
 	reaction,
-}: {
-	beat: (typeof faceBeats)[number];
-	pixels: boolean;
-	reaction: CompanionReaction;
-}) {
+}: { beat: FaceBeat; pixels: boolean; reaction: CompanionReaction }) {
 	const glance = reaction === "rest" ? 1 : 0.3;
-	const perk = reaction === "curious" ? 1.1 : 1;
-	const lowerLip = 49 + Math.round(beat.smile[0] / 2);
-	const upperLip = 49 + Math.round((beat.smile[0] - beat.smile[1]) / 2);
-	const mouth = pixels
-		? `M35 49V${lowerLip}H41V${lowerLip + 2}H59V${lowerLip}H65V49V${upperLip}H59V${upperLip + 2}H41V${upperLip}H35V49Z`
-		: `M35 49Q50 ${49 + beat.smile[0]} 65 49Q50 ${49 + beat.smile[0] - beat.smile[1]} 35 49Z`;
+	const perk = reaction === "curious" ? 1.08 : 1;
+	const openness = beat.openness ?? [1, 1];
+	const brows = beat.brows ?? [0, 0];
+	const look = beat.glance ?? [0, 0];
+	const mouths: Record<MouthShape, [string, string]> = {
+		none: ["", ""],
+		flat: ["M43 55h14", "M43 55h14"],
+		"slight smile": ["M41 53q9 5 18 0", "M41 53v2h18v-2"],
+		"slight frown": ["M42 56q8-5 16 0", "M42 56v-2h16v2"],
+		whistle: ["M51 51a4 4 0 1 0 0 8a4 4 0 1 0 0-8", "M48 51h7v8h-7Z"],
+		smile: ["M36 50q14 18 28 0", "M36 50v6h6v4h16v-4h6v-6"],
+		grin: ["M35 48h30q-2 17-15 17T35 48Z", "M35 49h30v8h-5v6H40v-6h-5Z"],
+		cat: ["M35 50q7 14 15 3q8 11 15-3", "M35 50v6h10v-4h10v4h10v-6"],
+		oh: ["M45 56a5 7 0 1 0 10 0a5 7 0 1 0-10 0", "M45 49h10v14H45Z"],
+		smirk: ["M36 53q16 13 29-5", "M36 54h6v5h12v-5h6v-5h5"],
+		pout: ["M40 59q10-13 20 0", "M40 59v-5h5v-4h10v4h5v5"],
+	};
 	const style = {
-		"--face-look-x": `${beat.glance[0] * glance}px`,
-		"--face-look-y": `${beat.glance[1] * glance}px`,
-		"--face-left-open": beat.eyes[0] * perk,
-		"--face-right-open": beat.eyes[1] * perk,
-		"--face-left-brow": `${beat.brows[0]}px`,
-		"--face-right-brow": `${beat.brows[1]}px`,
+		"--face-look-x": `${look[0] * glance}px`,
+		"--face-look-y": `${look[1] * glance}px`,
+		"--face-left-open": openness[0] * perk,
+		"--face-right-open": openness[1] * perk,
+		"--face-left-brow": `${brows[0]}px`,
+		"--face-right-brow": `${brows[1]}px`,
 	} as CSSProperties;
 	return (
-		<g className={cn("companion-art-live-face")} style={style}>
+		<g
+			className={cn("companion-art-live-face")}
+			data-emotion={beat.name}
+			style={style}
+		>
 			<g className={cn("companion-art-live-brows")}>
 				<path
 					className={cn("companion-art-brow-left")}
@@ -173,32 +499,29 @@ function LivelyFace({
 				/>
 			</g>
 			<g className={cn("companion-art-eyes")}>
-				<g className={cn("companion-art-eye-left")}>
-					<rect
-						className={cn("companion-art-eye-fill")}
-						x="18"
-						y="15"
-						width="19"
-						height="27"
-						rx={pixels ? 0 : 9.5}
-					/>
-				</g>
-				<g className={cn("companion-art-eye-right")}>
-					<rect
-						className={cn("companion-art-eye-fill")}
-						x="63"
-						y="15"
-						width="19"
-						height="27"
-						rx={pixels ? 0 : 9.5}
-					/>
+				<g key={beat.name} className={cn("companion-art-face-arrive")}>
+					<g className={cn("companion-art-eye-left")}>
+						<FaceEye shape={beat.eyes[0]} pixels={pixels} />
+					</g>
+					<g className={cn("companion-art-eye-right")}>
+						<g transform="translate(45 0)">
+							<FaceEye shape={beat.eyes[1]} pixels={pixels} mirrored />
+						</g>
+					</g>
 				</g>
 			</g>
-			<path
-				className={cn("companion-art-live-mouth")}
-				d={mouth}
-				style={{ d: `path("${mouth}")` } as CSSProperties}
-			/>
+			{beat.mouth !== "none" && (
+				<path
+					className={cn(
+						"companion-art-live-mouth",
+						beat.mouth === "grin" && "companion-art-eye-fill",
+					)}
+					d={mouths[beat.mouth][pixels ? 1 : 0]}
+				/>
+			)}
+			{beat.cheeks && (
+				<path className={cn("companion-art-cheeks")} d="M12 43h7m62 0h7" />
+			)}
 		</g>
 	);
 }
@@ -234,25 +557,24 @@ function Eyes({ mood, pixels, reaction }: ExpressionProps) {
 	if (expression === "loved")
 		return (
 			<>
-				<path d={eyePaths.complete[pixels ? 1 : 0]} />
+				<FaceEye shape="heart" pixels={pixels} />
+				<g transform="translate(45 0)">
+					<FaceEye shape="heart" pixels={pixels} />
+				</g>
 				<path className={cn("companion-art-cheeks")} d="M17 44h7m52 0h7" />
 			</>
 		);
 	if (expression === "happy") {
 		return (
 			<>
-				<rect
-					className={cn("companion-art-eye-fill")}
-					x="19"
-					y="16"
-					width="16"
-					height="25"
-					rx={pixels ? 0 : 8}
-				/>
-				<path d={pixels ? "M63 31v-6h5v-4h10v4h5v6" : "M63 31q10-17 20 0"} />
+				<FaceEye shape="caret" pixels={pixels} />
+				<g transform="translate(45 0)">
+					<FaceEye shape="caret" pixels={pixels} />
+				</g>
 			</>
 		);
 	}
+
 	if (expression === "dozing") {
 		return (
 			<path
@@ -439,7 +761,7 @@ function IdleVignette({
 }: {
 	character: BuiltinCompanionCharacter;
 	reaction: CompanionReaction;
-	beat: (typeof faceBeats)[number];
+	beat: FaceBeat;
 }) {
 	const pixels = character === "pixel";
 	const game = reaction === "daydream" && pixels;
@@ -555,7 +877,7 @@ export function CompanionArt({
 	const sprite =
 		expressionMood === "idle" &&
 		["peekaboo", "playful", "dozing", "waking"].includes(reaction);
-	const face = useFaceAnimation(lively, character);
+	const face = useFaceAnimation(lively, character, reaction === "listening");
 	const interacting = reaction !== "rest" && reaction !== "dozing" && !vignette;
 	const x = reaction === "listening" ? -0.55 : interacting ? gaze.x : 0;
 	const y = reaction === "listening" ? -0.45 : interacting ? gaze.y : 0;
@@ -674,6 +996,18 @@ export function CompanionArt({
 					/>
 				)}
 			</span>
+			{lively && reaction === "rest" && face.beat.mouth === "whistle" && (
+				<svg
+					aria-hidden="true"
+					className={cn("companion-art-whistle")}
+					viewBox="0 0 100 100"
+					focusable="false"
+				>
+					<path d="M80 33v-9l6-2v8m-6 3c-4-2-5 3-2 3q3 0 2-3m6-3c-4-2-5 3-2 3q3 0 2-3" />
+					<path d="M89 21v-8l5 2m-5 6c-4-2-5 3-2 3q3 0 2-3" />
+				</svg>
+			)}
+
 			{vignette && reaction === "daydream" && character === "sprout" && (
 				<svg
 					aria-hidden="true"
