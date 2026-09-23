@@ -461,7 +461,7 @@ test("head rub reversals give bounded joy while idle or complete", async () => {
 	});
 });
 
-test("only an idle companion dozes, and hover, focus or work wakes it", async () => {
+test("idle and completed companions sleep, while live task states stay awake", async () => {
 	await fixture(async ({ button, event, advance, mood, visibility }) => {
 		await advance(89_999);
 		assert.equal(button.dataset.reaction, "rest");
@@ -474,10 +474,21 @@ test("only an idle companion dozes, and hover, focus or work wakes it", async ()
 		await event("pointerout");
 		await advance(90_000);
 		assert.equal(button.dataset.reaction, "dozing");
-		await mood("working");
-		await advance(100_000);
+		for (const state of ["working", "attention", "error", "offline"]) {
+			await mood(state);
+			await advance(100_000);
+			assert.equal(button.dataset.reaction, "rest");
+			assert.equal(timers.size, 0);
+		}
+		await mood("complete");
+		await advance(89_999);
 		assert.equal(button.dataset.reaction, "rest");
-		assert.equal(timers.size, 0);
+		await advance(1);
+		assert.equal(button.dataset.reaction, "dozing");
+		await event("pointerover");
+		assert.equal(button.dataset.reaction, "waking");
+		await advance(800);
+		await event("pointerout");
 		await mood("idle");
 		await advance(90_000);
 		await act(async () => button.focus());

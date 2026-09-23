@@ -95,7 +95,8 @@ export function useCompanionInteraction(
 			sleeping.current = false;
 			setDozing(false);
 			const canRest = () =>
-				currentMood.current === "idle" &&
+				(currentMood.current === "idle" ||
+					currentMood.current === "complete") &&
 				!chatVisible.current &&
 				!document.hidden;
 			if (!canRest()) return;
@@ -293,7 +294,7 @@ export function useCompanionInteraction(
 		delight ??
 		(pressed
 			? "pressed"
-			: dozing && mood === "idle"
+			: dozing && (mood === "idle" || mood === "complete")
 				? "dozing"
 				: hovered || focused
 					? "curious"
