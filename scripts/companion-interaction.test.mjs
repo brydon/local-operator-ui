@@ -245,15 +245,15 @@ test("three rapid taps show love with a shared cooldown and no extra timers", as
 
 test("chat keeps the companion awake; waking yields immediately to a new grab", async () => {
 	await fixture(async ({ button, event, advance, chat }) => {
-		await advance(25_000);
+		await advance(90_000);
 		assert.equal(button.dataset.reaction, "dozing");
 		await chat(true);
 		assert.equal(button.dataset.reaction, "waking");
-		await advance(30_000);
+		await advance(100_000);
 		assert.equal(button.dataset.reaction, "rest");
 		assert.equal(timers.size, 0);
 		await chat(false);
-		await advance(25_000);
+		await advance(90_000);
 		await event("pointerover");
 		assert.equal(button.dataset.reaction, "waking");
 		await event("pointerdown");
@@ -335,7 +335,7 @@ test("head rub reversals give bounded joy while idle or complete", async () => {
 
 test("only an idle companion dozes, and hover, focus or work wakes it", async () => {
 	await fixture(async ({ button, event, advance, mood, visibility }) => {
-		await advance(24_999);
+		await advance(89_999);
 		assert.equal(button.dataset.reaction, "rest");
 		await advance(1);
 		assert.equal(button.dataset.reaction, "dozing");
@@ -344,14 +344,14 @@ test("only an idle companion dozes, and hover, focus or work wakes it", async ()
 		await advance(800);
 		assert.equal(button.dataset.reaction, "curious");
 		await event("pointerout");
-		await advance(25_000);
+		await advance(90_000);
 		assert.equal(button.dataset.reaction, "dozing");
 		await mood("working");
-		await advance(30_000);
+		await advance(100_000);
 		assert.equal(button.dataset.reaction, "rest");
 		assert.equal(timers.size, 0);
 		await mood("idle");
-		await advance(25_000);
+		await advance(90_000);
 		await act(async () => button.focus());
 		assert.equal(button.dataset.reaction, "waking");
 		await visibility(true);
@@ -359,7 +359,7 @@ test("only an idle companion dozes, and hover, focus or work wakes it", async ()
 		await mood("idle");
 		assert.equal(timers.size, 0);
 		await visibility(false);
-		await advance(25_000);
+		await advance(90_000);
 		assert.equal(button.dataset.reaction, "dozing");
 	});
 });
@@ -383,7 +383,7 @@ test("cancellation clears gestures; a visible unfocused companion can still doze
 			assert.equal(timers.size, type === "blur" ? 1 : 0);
 			assert.equal(frames.size, 0);
 			assert.equal(button.hasPointerCapture(1), false);
-			await advance(30_000);
+			await advance(100_000);
 			await flush();
 			await event("pointerup");
 			assert.equal(released(), null);

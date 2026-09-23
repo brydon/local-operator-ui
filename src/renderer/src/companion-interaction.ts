@@ -80,7 +80,7 @@ export function useCompanionInteraction(
 						sleeping.current = true;
 						setDozing(true);
 					}
-				}, 25_000);
+				}, 90_000);
 		},
 		[clear, play],
 	);
