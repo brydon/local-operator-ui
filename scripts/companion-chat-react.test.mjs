@@ -63,7 +63,7 @@ async function mount(t, overrides = {}) {
 	document.body.append(host);
 	const root = createRoot(host);
 	t.after(async () => {
-		await act(() => root.unmount());
+		await act(async () => root.unmount());
 		host.remove();
 	});
 	let props = {
@@ -77,13 +77,15 @@ async function mount(t, overrides = {}) {
 	};
 	const render = async (next = {}) => {
 		props = { ...props, ...next };
-		await act(() => root.render(React.createElement(CompanionChat, props)));
+		await act(async () =>
+			root.render(React.createElement(CompanionChat, props)),
+		);
 	};
 	await render();
 	const input = host.querySelector("textarea");
 	const button = (label) => host.querySelector(`[aria-label="${label}"]`);
 	const type = (value) =>
-		act(() => {
+		act(async () => {
 			Object.getOwnPropertyDescriptor(
 				dom.window.HTMLTextAreaElement.prototype,
 				"value",
@@ -97,7 +99,7 @@ async function mount(t, overrides = {}) {
 				new dom.window.Event("submit", { bubbles: true, cancelable: true }),
 			);
 	const key = (options = {}) =>
-		act(() =>
+		act(async () =>
 			input.dispatchEvent(
 				new dom.window.KeyboardEvent("keydown", {
 					key: "Enter",
@@ -125,7 +127,7 @@ test("collapse preserves drafts and pending sends cannot be duplicated", async (
 	assert.equal(host.querySelector("section").hidden, true);
 	await render({ open: true });
 	assert.equal(input.value, "  Help me plan this  ");
-	await act(() => {
+	await act(async () => {
 		submit();
 		submit();
 	});
@@ -133,7 +135,7 @@ test("collapse preserves drafts and pending sends cannot be duplicated", async (
 	assert.equal(input.readOnly, true);
 	assert.equal(button("New chat").disabled, true);
 	assert.equal(button("Send message").disabled, true);
-	await act(() => pending.resolve(true));
+	await act(async () => pending.resolve(true));
 	await render({ snapshot: { ...idle, status: "working", canSend: false } });
 	assert.equal(input.value, "");
 	assert.equal(input.readOnly, false);
@@ -149,12 +151,12 @@ for (const moveFocus of [false, true]) {
 		});
 		await type("One message");
 		button("Send message").focus();
-		await act(() => submit());
+		await act(async () => submit());
 		assert.equal(document.activeElement, input);
 		assert.equal(button("Send message").disabled, true);
 		const expand = button("Open chat in the full app");
 		if (moveFocus) expand.focus();
-		await act(() => pending.resolve(true));
+		await act(async () => pending.resolve(true));
 		assert.equal(document.activeElement, moveFocus ? expand : input);
 	});
 }
@@ -166,7 +168,7 @@ test("failed delivery retains the draft and displays the service error", async (
 		},
 	});
 	await type("Keep this safe");
-	await act(() => submit());
+	await act(async () => submit());
 	assert.equal(input.value, "Keep this safe");
 	assert.ok(
 		host
@@ -188,6 +190,66 @@ test("failed delivery retains the draft and displays the service error", async (
 	assert.equal(button("Send message").disabled, true);
 });
 
+test("retrying the original preserves edits and cannot send them or duplicate the retry", async (t) => {
+	const pending = deferred();
+	const sent = [];
+	const { render, input, button, type, key, submit } = await mount(t, {
+		snapshot: {
+			...idle,
+			status: "error",
+			error: "Send unconfirmed. Retry original to check; your draft is saved.",
+			pendingText: "The original task",
+		},
+		onSend: (text) => {
+			sent.push(text);
+			return pending.promise;
+		},
+	});
+	await type("An edited draft I want to keep");
+	assert.equal(button("Send message").disabled, true);
+	await key();
+	await act(async () => submit());
+	assert.deepEqual(sent, []);
+	const retry = button("Retry original message");
+	retry.focus();
+	await act(async () => {
+		retry.click();
+		retry.click();
+	});
+	assert.deepEqual(sent, ["The original task"]);
+	assert.equal(document.activeElement, input);
+	assert.equal(retry.disabled, true);
+	assert.equal(input.readOnly, true);
+	const expand = button("Open chat in the full app");
+	expand.focus();
+	await act(async () => pending.resolve(true));
+	await render({ snapshot: { ...idle, status: "working", canSend: false } });
+	assert.equal(button("Retry original message"), null);
+	assert.equal(input.value, "An edited draft I want to keep");
+	assert.equal(document.activeElement, expand);
+	await render({ snapshot: idle });
+	assert.equal(button("Send message").disabled, false);
+	await key();
+	assert.deepEqual(sent, [
+		"The original task",
+		"An edited draft I want to keep",
+	]);
+});
+
+test("an unchanged original clears only after its retry is accepted", async (t) => {
+	let accepted = false;
+	const { input, button, type } = await mount(t, {
+		snapshot: { ...idle, pendingText: "One task" },
+		onSend: async () => accepted,
+	});
+	await type("  One task  ");
+	await act(async () => button("Retry original message").click());
+	assert.equal(input.value, "  One task  ");
+	accepted = true;
+	await act(async () => button("Retry original message").click());
+	assert.equal(input.value, "");
+});
+
 test("a chat creation failure can open the app before a session exists", async (t) => {
 	let expanded = 0;
 	const { input, button, type } = await mount(t, {
@@ -202,7 +264,7 @@ test("a chat creation failure can open the app before a session exists", async (
 	await type("Keep this draft");
 	assert.equal(button("New chat"), null);
 	assert.equal(button("Open chat in the full app").disabled, false);
-	await act(() => button("Open chat in the full app").click());
+	await act(async () => button("Open chat in the full app").click());
 	assert.equal(expanded, 1);
 	assert.equal(input.value, "Keep this draft");
 });
@@ -257,10 +319,13 @@ test("reply updates preserve scroll position until the next answer", async (t) =
 
 test("streaming replies remain visible while announcements wait for completion", async (t) => {
 	const { host, render, input } = await mount(t);
+	const announcement = host.querySelector('[aria-live="polite"]');
+	assert.equal(announcement.textContent, "");
 	const message = { id: "answer", role: "assistant", text: "One" };
 	const working = { ...idle, status: "working", canSend: false };
 	await render({ snapshot: { ...working, messages: [message] } });
 	const reply = host.querySelector(".companion-chat-reply p");
+	assert.equal(reply, announcement);
 	assert.equal(reply.getAttribute("aria-live"), "polite");
 	assert.equal(reply.getAttribute("aria-busy"), "true");
 	assert.equal(reply.textContent, "One");
@@ -285,6 +350,112 @@ test("streaming replies remain visible while announcements wait for completion",
 	assert.equal(document.activeElement, input);
 });
 
+test("the first completed answer updates an existing live region", async (t) => {
+	const { host, render, input } = await mount(t);
+	const announcement = host.querySelector('[aria-live="polite"]');
+	assert.equal(announcement.textContent, "");
+	assert.equal(announcement.closest("section").hasAttribute("hidden"), false);
+	await render({
+		snapshot: {
+			...idle,
+			messages: [{ id: "first", role: "assistant", text: "Already complete." }],
+		},
+	});
+	assert.equal(host.querySelector('[aria-live="polite"]'), announcement);
+	assert.equal(announcement.textContent, "Already complete.");
+	assert.equal(announcement.getAttribute("aria-busy"), "false");
+	assert.equal(document.activeElement, input);
+});
+
+test("question context is optional and a follow-up distinguishes the previous reply", async (t) => {
+	const messages = [
+		{ id: "question", role: "user", text: "What should I do today?" },
+		{ id: "answer", role: "assistant", text: "Take a walk." },
+	];
+	const { host, render, button } = await mount(t, {
+		snapshot: { ...idle, messages },
+	});
+	const reply = host.querySelector(".companion-chat-reply");
+	const announcement = reply.querySelector('[aria-live="polite"]');
+	assert.equal(reply.textContent, "Take a walk.");
+	assert.equal(
+		button("Show last question").getAttribute("aria-expanded"),
+		"false",
+	);
+	await act(async () => button("Show last question").click());
+	assert.ok(
+		reply.textContent.includes("Your last question: What should I do today?"),
+	);
+	const disclosure = button("Hide last question");
+	assert.equal(disclosure.getAttribute("aria-expanded"), "true");
+	assert.equal(announcement.textContent, "Take a walk.");
+	disclosure.focus();
+	const activeQuestion = { id: "follow-up", text: "What if it rains?" };
+	await render({
+		snapshot: {
+			...idle,
+			status: "working",
+			canSend: false,
+			messages,
+			activeQuestion,
+		},
+	});
+	assert.equal(reply.getAttribute("aria-label"), "Previous reply");
+	assert.ok(reply.textContent.includes("Previous reply"));
+	assert.ok(
+		reply.textContent.includes("Your last question: What if it rains?"),
+	);
+	assert.equal(document.activeElement, disclosure);
+	await render({
+		snapshot: {
+			...idle,
+			messages: [
+				...messages,
+				{ ...activeQuestion, role: "user" },
+				{ id: "next-answer", role: "assistant", text: "Read a book." },
+			],
+		},
+	});
+	assert.equal(reply.getAttribute("aria-label"), "Latest reply");
+	assert.equal(reply.textContent.includes("Previous reply"), false);
+	assert.equal(reply.querySelector('[aria-live="polite"]'), announcement);
+	assert.equal(announcement.textContent, "Read a book.");
+	await act(async () => button("Hide last question").click());
+	assert.equal(reply.textContent, "Read a book.");
+});
+
+test("showing the last question reveals it without moving focus or following reply updates", async (t) => {
+	const messages = [
+		{ id: "question", role: "user", text: "What should I do today?" },
+		{ id: "answer", role: "assistant", text: "Take a walk.\n".repeat(30) },
+	];
+	const { host, render, button } = await mount(t, {
+		snapshot: { ...idle, messages },
+	});
+	const reply = host.querySelector(".companion-chat-reply");
+	reply.scrollTop = 80;
+	const disclosure = button("Show last question");
+	disclosure.focus();
+	await act(async () => disclosure.click());
+	assert.equal(reply.scrollTop, 0);
+	assert.equal(document.activeElement, disclosure);
+	assert.ok(reply.textContent.startsWith("Your last question:"));
+	reply.scrollTop = 36;
+	await render({
+		snapshot: {
+			...idle,
+			messages: [
+				messages[0],
+				{ ...messages[1], text: `${messages[1].text}Bring water.` },
+			],
+		},
+	});
+	assert.equal(reply.scrollTop, 36);
+	assert.equal(document.activeElement, disclosure);
+	await act(async () => disclosure.click());
+	assert.equal(reply.scrollTop, 36);
+});
+
 test("pending approval blocks sending and opens the full app", async (t) => {
 	let expanded = false;
 	const { host, render, input, button, type } = await mount(t, {
@@ -305,7 +476,7 @@ test("pending approval blocks sending and opens the full app", async (t) => {
 	});
 	assert.equal(button("Send message").disabled, true);
 	assert.equal(host.querySelector('[role="alert"]'), null);
-	await act(() => host.querySelector(".companion-chat-open").click());
+	await act(async () => host.querySelector(".companion-chat-open").click());
 	assert.equal(expanded, true);
 	assert.equal(input.value, "A follow-up");
 });

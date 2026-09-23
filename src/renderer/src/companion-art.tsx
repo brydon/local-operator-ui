@@ -1,5 +1,6 @@
 import { cn } from "@shared/lib/utils";
 import { type CSSProperties, useEffect, useRef, useState } from "react";
+import type { BuiltinCompanionCharacter } from "../../shared/companion-skin";
 import type { CompanionMood } from "../../shared/desktop-companion";
 import hoodieMotion from "./assets/companions/hoodie-motion.png";
 import hoodie from "./assets/companions/hoodie.png";
@@ -7,14 +8,18 @@ import inkyMotion from "./assets/companions/inky-motion.png";
 import inky from "./assets/companions/inky.png";
 import pixel from "./assets/companions/pixel.png";
 import sprout from "./assets/companions/sprout.png";
-import { type CompanionScene, getCompanionScene } from "./companion-scenes";
+import {
+	type CompanionScene,
+	getCompanionReactionDuration,
+	getCompanionScene,
+} from "./companion-scenes";
 import {
 	CompanionSprite,
 	type CompanionSpriteAction,
 } from "./companion-sprites";
 import "./companion-art.css";
 
-export type BuiltinCompanionCharacter = "sprout" | "hoodie" | "pixel" | "inky";
+export type { BuiltinCompanionCharacter } from "../../shared/companion-skin";
 export type CompanionReaction =
 	| "rest"
 	| "curious"
@@ -1109,7 +1114,7 @@ export function CompanionArt({
 	const x = reaction === "listening" ? -0.55 : interacting ? gaze.x : 0;
 	const y = reaction === "listening" ? -0.45 : interacting ? gaze.y : 0;
 	const tracking = {
-		"--companion-story-duration": story ? `${story.duration}ms` : undefined,
+		"--companion-story-duration": `${getCompanionReactionDuration(character, reaction) ?? 0}ms`,
 		"--companion-art-gaze-x": `${x * 7}px`,
 		"--companion-art-gaze-y": `${y * 4}px`,
 		"--companion-art-tilt": `${x * 2 + 1.5}deg`,
@@ -1129,6 +1134,7 @@ export function CompanionArt({
 			data-motion-ready={motionReadyFor === character || undefined}
 			data-vignette={vignette || undefined}
 			data-sleeping={sleeping || undefined}
+			data-story={(sprite && story !== undefined) || undefined}
 			data-celebrating={celebrating || undefined}
 			data-face-beat={lively ? face.index : undefined}
 			data-paused={face.paused || undefined}
@@ -1191,7 +1197,7 @@ export function CompanionArt({
 										reaction={reaction}
 										beat={face.beat}
 									/>
-								) : lively ? (
+								) : lively || (sprite && story) ? (
 									<LivelyFace
 										beat={face.beat}
 										pixels={pixels}

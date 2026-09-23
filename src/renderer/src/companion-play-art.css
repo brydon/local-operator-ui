@@ -36,6 +36,10 @@
 .companion-play-mitten {
 	fill: #f3e6c9;
 }
+.companion-play-tentacle {
+	fill: #e7979d;
+	stroke: #ae5e6e;
+}
 [data-chosen] > .companion-play-cuff {
 	fill: #efbd62;
 }
@@ -55,14 +59,9 @@
 	stroke-width: 2;
 	animation: companion-treat-crumbs 700ms ease-out both;
 }
-.companion-play-art[data-phase="playing"] .companion-play-ball {
+.companion-play-ball {
+	transition: none;
 	transform-origin: 55px 18px;
-	animation: companion-ball-arc 1800ms linear both;
-}
-.companion-play-art[data-phase="reveal"] .companion-play-ball {
-	transform: translate(34px, 65px) rotate(30deg);
-	transform-origin: 55px 18px;
-	animation: companion-ball-settle 500ms ease-out;
 }
 .companion-play-heart {
 	fill: #cce7b8;
@@ -111,31 +110,6 @@
 		transform: translateY(6px);
 	}
 }
-@keyframes companion-ball-arc {
-	0% {
-		transform: translate(-32px, 18px) rotate(-100deg);
-	}
-	25% {
-		transform: translate(-18px, -8px) rotate(-50deg);
-	}
-	50% {
-		transform: translate(0, -11px) rotate(0deg);
-	}
-	75% {
-		transform: translate(18px, -8px) rotate(50deg);
-	}
-	100% {
-		transform: translate(32px, 18px) rotate(100deg);
-	}
-}
-@keyframes companion-ball-settle {
-	from {
-		transform: translate(28px, 54px) rotate(0deg);
-	}
-	to {
-		transform: translate(34px, 65px) rotate(30deg);
-	}
-}
 @keyframes companion-play-thanks {
 	from {
 		opacity: 0;
@@ -173,13 +147,6 @@
 	}
 	.companion-play-crumbs {
 		opacity: 0;
-	}
-	.companion-play-art[data-phase="playing"] .companion-play-ball {
-		transform: translate(-18px, 0) rotate(-25deg);
-	}
-	.companion-play-art[data-phase="playing"]:is([data-step="2"], [data-step="4"])
-		.companion-play-ball {
-		transform: translate(18px, 0) rotate(25deg);
 	}
 	.companion-dream {
 		opacity: 0;

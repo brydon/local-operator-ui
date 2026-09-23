@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { CompanionActivity } from "../../shared/desktop-companion";
 import type { CompanionReaction } from "./companion-art";
 
+export const COMPANION_BOUNCE_DURATION = 1800;
+
 export interface CompanionPlayScene {
 	kind: CompanionActivity;
 	phase: "offer" | "playing" | "reveal" | "finish";
@@ -140,7 +142,10 @@ export function useCompanionPlay(available: boolean, characterId: string) {
 			else {
 				update(bounced);
 				setAnnouncement(reducedMotion.current ? `${bounced.step} of 5.` : "");
-				later(endBounce, reducedMotion.current ? 20_000 : 1800);
+				later(
+					endBounce,
+					reducedMotion.current ? 20_000 : COMPANION_BOUNCE_DURATION,
+				);
 			}
 		},
 		[canPlay, cancel, endBounce, finish, later, update],
@@ -158,7 +163,7 @@ export function useCompanionPlay(available: boolean, characterId: string) {
 				current.current?.kind === "bounce" &&
 				current.current.phase === "playing"
 			)
-				later(endBounce, motion.matches ? 20_000 : 1800);
+				later(endBounce, motion.matches ? 20_000 : COMPANION_BOUNCE_DURATION);
 		};
 		const hide = () => {
 			if (document.hidden) cancel();

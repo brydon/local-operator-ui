@@ -69,6 +69,11 @@ function fixture(t, { headless = true, preferences } = {}) {
 			this.messages = [];
 			this.boundsChanges = 0;
 			this.webContents = new EventEmitter();
+			this.zoomFactor = options.webPreferences.zoomFactor;
+			this.webContents.getZoomFactor = () => this.zoomFactor;
+			this.webContents.setZoomFactor = (factor) => {
+				this.zoomFactor = factor;
+			};
 			this.webContents.mainFrame = { url: "" };
 			this.webContents.send = (...message) => this.messages.push(message);
 			this.webContents.setWindowOpenHandler = (handler) => {
@@ -618,19 +623,71 @@ test("inline chat preserves its lower-right anchor through collapse and dragging
 	});
 });
 
+test("clamped chat expansion and reply resizing restore the intended pet position at every corner", (t) => {
+	for (const position of [
+		{ x: 0, y: 0 },
+		{ x: 1788, y: 0 },
+		{ x: 0, y: 944 },
+		{ x: 1788, y: 944 },
+	]) {
+		const f = fixture(t, { preferences: { position } });
+		const window = f.windows[0];
+		const before = window.getBounds();
+		for (const close of ["collapse-chat", "hide"]) {
+			f.action("open");
+			for (const height of [330, 194, 360]) {
+				f.action("chat-size", height);
+				const bounds = window.getBounds();
+				assert.ok(bounds.x >= 0 && bounds.y >= 0);
+				assert.ok(bounds.x + bounds.width <= 1920);
+				assert.ok(bounds.y + bounds.height <= 1080);
+				assert.deepEqual(f.preferences().position, position);
+			}
+			f.action(close);
+			assert.deepEqual(window.getBounds(), before);
+			assert.deepEqual(f.preferences().position, position);
+		}
+	}
+});
+
+test("only actual movement replaces a clamped chat's intended anchor", (t) => {
+	const f = fixture(t, { preferences: { position: { x: 0, y: 0 } } });
+	const window = f.windows[0];
+	f.action("open");
+	f.action("nudge", "ArrowLeft");
+	f.action("nudge", "ArrowUp");
+	drag(f, 3, 2);
+	f.action("collapse-chat");
+	assert.deepEqual(window.position, [0, 0]);
+	f.action("open");
+	f.action("nudge", "ArrowRight");
+	f.action("chat-size", 330);
+	f.action("collapse-chat");
+	assert.deepEqual(window.position, [208, 58]);
+	assert.deepEqual(f.preferences().position, { x: 208, y: 58 });
+	f.action("open");
+	drag(f, 40, 50);
+	f.action("collapse-chat");
+	assert.deepEqual(window.position, [248, 244]);
+	assert.deepEqual(f.preferences().position, { x: 248, y: 244 });
+});
+
 test("chat layout stays within a changed display work area", (t) => {
 	const f = fixture(t);
 	const window = f.windows[0];
+	const before = window.getBounds();
 	f.action("open");
 	f.action("chat-size", 360);
 	f.workArea({ x: -260, y: -80, width: 260, height: 240 });
 	f.screen.emit("display-metrics-changed");
 	assert.deepEqual(window.getBounds(), {
-		x: -260,
+		x: -211,
 		y: -80,
-		width: 260,
+		width: 211,
 		height: 240,
 	});
+	assert.ok(window.size.width / window.zoomFactor >= 316);
+	assert.ok(window.size.height / window.zoomFactor >= 360);
 	f.action("collapse-chat");
 	assert.deepEqual(window.getBounds(), {
 		x: -132,
@@ -638,6 +695,144 @@ test("chat layout stays within a changed display work area", (t) => {
 		width: 132,
 		height: 136,
 	});
+	f.workArea({ x: 0, y: 0, width: 1920, height: 1080 });
+	f.screen.emit("display-metrics-changed");
+	assert.deepEqual(window.getBounds(), before);
+	assert.deepEqual(f.preferences().position, { x: before.x, y: before.y });
+});
+
+test("launching without the saved monitor retains its anchor until display-added restores it", (t) => {
+	const intended = { x: 2000, y: 20 };
+	const f = fixture(t, { preferences: { position: intended } });
+	assert.deepEqual(f.windows[0].position, [1788, 20]);
+	assert.deepEqual(f.preferences().position, intended);
+	f.action("open");
+	f.action("chat-size", 330);
+	f.action("collapse-chat");
+	assert.deepEqual(f.windows[0].position, [1788, 20]);
+	assert.deepEqual(f.preferences().position, intended);
+	const restarted = fixture(t, { preferences: f.preferences() });
+	for (const instance of [f, restarted]) {
+		const window = instance.windows[0];
+		instance.action("open");
+		const changes = window.boundsChanges;
+		instance.workArea({ x: 1920, y: 0, width: 1920, height: 1080 });
+		instance.screen.emit("display-added");
+		assert.equal(window.boundsChanges, changes + 1);
+		assert.equal(window.position[0], 1920);
+		instance.action("collapse-chat");
+		assert.deepEqual(window.position, [intended.x, intended.y]);
+		assert.deepEqual(instance.preferences().position, intended);
+		instance.workArea({ x: 0, y: 0, width: 1920, height: 1080 });
+		instance.screen.emit("display-removed");
+		assert.deepEqual(window.position, [1788, 20]);
+		assert.deepEqual(instance.preferences().position, intended);
+		instance.workArea({ x: 1920, y: 0, width: 1920, height: 1080 });
+		instance.screen.emit("display-added");
+		assert.deepEqual(window.position, [intended.x, intended.y]);
+	}
+});
+
+test("chat close and work-area changes end a drag before its stale cursor can move the pet", (t) => {
+	for (const interruption of ["collapse-chat", "display"]) {
+		const f = fixture(t, { preferences: { position: { x: 0, y: 0 } } });
+		const window = f.windows[0];
+		f.action("open");
+		f.action("drag", "start");
+		f.cursor({ x: 430, y: 440 });
+		f.action("drag", "move");
+		if (interruption === "display") {
+			f.workArea({ x: -900, y: -80, width: 900, height: 700 });
+			f.screen.emit("display-metrics-changed");
+		} else f.action(interruption);
+		const before = window.getBounds();
+		f.cursor({ x: 900, y: 900 });
+		f.action("drag", "move");
+		f.action("drag", "end");
+		assert.deepEqual(window.getBounds(), before);
+		assert.deepEqual(f.preferences().position, { x: 214, y: 98 });
+	}
+});
+
+test("companion zoom scales native bounds, keeps its intended anchor and stops at its limits", (t) => {
+	const f = fixture(t, { preferences: { position: { x: 0, y: 0 } } });
+	const window = f.windows[0];
+	const before = window.getBounds();
+	for (let index = 0; index < 20; index++)
+		assert.equal(f.companion.changeZoom(window, "in"), true);
+	assert.equal(window.zoomFactor, 1.6);
+	assert.deepEqual(window.size, { width: 212, height: 218 });
+	f.action("open");
+	f.action("chat-size", 330);
+	assert.deepEqual(window.size, { width: 506, height: 528 });
+	assert.ok(window.size.width / window.zoomFactor >= 316);
+	assert.equal(window.size.height / window.zoomFactor, 330);
+	f.action("collapse-chat");
+	f.companion.changeZoom(window, "reset");
+	assert.deepEqual(window.getBounds(), before);
+	for (let index = 0; index < 20; index++)
+		f.companion.changeZoom(window, "out");
+	assert.equal(window.zoomFactor, 0.8);
+	assert.deepEqual(window.size, { width: 106, height: 109 });
+	f.action("open");
+	assert.deepEqual(window.size, { width: 253, height: 264 });
+	f.action("collapse-chat");
+	f.companion.changeZoom(window, "reset");
+	assert.deepEqual(window.getBounds(), before);
+	assert.deepEqual(f.preferences().position, { x: before.x, y: before.y });
+	assert.deepEqual(window.presentations, []);
+});
+
+test("moving a zoomed companion establishes an anchor that survives reset and chat resizing", (t) => {
+	const f = fixture(t);
+	const window = f.windows[0];
+	f.companion.changeZoom(window, "in");
+	f.action("open");
+	drag(f, -40, -50);
+	const moved = window.getBounds();
+	const intended = {
+		x: moved.x + moved.width - 132,
+		y: moved.y + moved.height - 136,
+	};
+	f.action("chat-size", 330);
+	f.action("collapse-chat");
+	f.companion.changeZoom(window, "reset");
+	assert.deepEqual(window.position, [intended.x, intended.y]);
+	assert.deepEqual(f.preferences().position, intended);
+});
+
+test("companion zoom commands only handle this window and each shortcut's key-down", (t) => {
+	const f = fixture(t);
+	const window = f.windows[0];
+	assert.equal(f.companion.changeZoom({}, "in"), false);
+	const input = (key, extra = {}) => {
+		let prevented = false;
+		window.webContents.emit(
+			"before-input-event",
+			{
+				preventDefault: () => {
+					prevented = true;
+				},
+			},
+			{ type: "keyDown", meta: true, key, ...extra },
+		);
+		return prevented;
+	};
+	assert.equal(input("="), true);
+	assert.equal(window.zoomFactor, 1.1);
+	assert.equal(input("=", { type: "keyUp" }), false);
+	assert.equal(input("=", { meta: false }), false);
+	assert.equal(input("x"), false);
+	assert.equal(window.zoomFactor, 1.1);
+	assert.equal(input("+", { meta: false, control: true }), true);
+	assert.equal(window.zoomFactor, 1.2);
+	assert.equal(input("-"), true);
+	assert.equal(window.zoomFactor, 1.1);
+	assert.equal(input("o"), true);
+	assert.equal(window.zoomFactor, 1);
+	f.companion.setEnabled(false);
+	assert.equal(f.companion.changeZoom(window, "in"), false);
+	assert.equal(input("="), false);
 });
 
 test("intrinsic chat height accepts only trusted finite values and preserves its anchor", (t) => {
@@ -1050,11 +1245,13 @@ test("native close disables the companion, cancels polling and persists the menu
 
 test("disposal unregisters IPC and display observers without disabling the next launch", (t) => {
 	const f = fixture(t);
+	assert.equal(f.screen.listenerCount("display-added"), 1);
 	f.companion.dispose();
 	assert.equal(f.windows[0].destroyed, true);
 	assert.equal(f.preferences().enabled, true);
 	assert.equal(f.handlers.size, 0);
 	assert.equal(f.ipcMain.listenerCount("companion:action"), 0);
+	assert.equal(f.screen.listenerCount("display-added"), 0);
 	assert.equal(f.screen.listenerCount("display-removed"), 0);
 	assert.equal(f.screen.listenerCount("display-metrics-changed"), 0);
 	assert.equal(f.intervals.size, 0);

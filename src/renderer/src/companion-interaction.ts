@@ -6,30 +6,17 @@ import {
 } from "../../shared/desktop-companion";
 import type { CompanionReaction } from "./companion-art";
 import {
-	type CompanionScene,
+	type CompanionTimedReaction,
 	getCompanionIdleScenes,
+	getCompanionReactionDuration,
 	getCompanionScene,
 } from "./companion-scenes";
-
-type DelightReaction =
-	| "happy"
-	| "loved"
-	| "waking"
-	| "landing"
-	| "stretching"
-	| "yawning"
-	| "daydream"
-	| "starstruck"
-	| "peekaboo"
-	| "peeking"
-	| "found"
-	| "playful"
-	| CompanionScene;
 
 export function useCompanionInteraction(
 	mood: CompanionMood = "idle",
 	chatOpen = false,
 	character = "sprout",
+	chatEngaged = chatOpen,
 ) {
 	const [hovered, setHovered] = useState(false);
 	const [focused, setFocused] = useState(false);
@@ -38,7 +25,7 @@ export function useCompanionInteraction(
 		"grabbed" | "dragging" | "struggling" | null
 	>(null);
 	const [dozing, setDozing] = useState(false);
-	const [delight, setDelight] = useState<DelightReaction | null>(null);
+	const [delight, setDelight] = useState<CompanionTimedReaction | null>(null);
 	const [gaze, setGaze] = useState({ x: 0, y: 0 });
 	const origin = useRef<{
 		x: number;
@@ -61,13 +48,14 @@ export function useCompanionInteraction(
 	const affection = useRef<number[]>([]);
 	const taps = useRef({ count: 0, started: 0 });
 	const attention = useRef({ hovered: false, focused: false });
-	const ambient = useRef<DelightReaction | null>(null);
+	const ambient = useRef<CompanionTimedReaction | null>(null);
 	const nextScene = useRef(0);
 	const cuddles = useRef(0);
 	const currentCharacter = useRef(character);
 	const reducedMotion = useRef(false);
 	const sleeping = useRef(false);
 	const chatVisible = useRef(chatOpen);
+	const chatActive = useRef(chatEngaged);
 	const timers = useRef({ idle: 0, hold: 0, reaction: 0 });
 	const frame = useRef<number | null>(null);
 	const nextGaze = useRef({ x: 0, y: 0 });
@@ -82,7 +70,7 @@ export function useCompanionInteraction(
 		frame.current = null;
 	}, []);
 	const play = useCallback(
-		(reaction: DelightReaction, duration: number) => {
+		(reaction: CompanionTimedReaction) => {
 			clear("reaction");
 			ambient.current =
 				reaction === "stretching" ||
@@ -96,11 +84,14 @@ export function useCompanionInteraction(
 					? reaction
 					: null;
 			setDelight(reaction);
-			timers.current.reaction = window.setTimeout(() => {
-				timers.current.reaction = 0;
-				ambient.current = null;
-				setDelight(null);
-			}, duration);
+			timers.current.reaction = window.setTimeout(
+				() => {
+					timers.current.reaction = 0;
+					ambient.current = null;
+					setDelight(null);
+				},
+				getCompanionReactionDuration(currentCharacter.current, reaction),
+			);
 		},
 		[clear],
 	);
@@ -114,13 +105,13 @@ export function useCompanionInteraction(
 		(stretch = true) => {
 			clear("idle");
 			cancelAmbient();
-			if (sleeping.current && stretch) play("waking", 800);
+			if (sleeping.current && stretch) play("waking");
 			sleeping.current = false;
 			setDozing(false);
 			const canRest = () =>
 				(currentMood.current === "idle" ||
 					currentMood.current === "complete") &&
-				!chatVisible.current &&
+				!chatActive.current &&
 				!document.hidden;
 			if (!canRest()) return;
 			const started = window.performance.now();
@@ -128,9 +119,10 @@ export function useCompanionInteraction(
 			const opportunities = [28_000, 66_000];
 			const schedule = () => {
 				const now = window.performance.now();
-				const next = reducedMotion.current
-					? undefined
-					: opportunities.find((at) => started + at > now);
+				const next =
+					reducedMotion.current || chatVisible.current
+						? undefined
+						: opportunities.find((at) => started + at > now);
 				timers.current.idle = window.setTimeout(
 					() => {
 						timers.current.idle = 0;
@@ -150,30 +142,38 @@ export function useCompanionInteraction(
 								: hour >= 11 && hour <= 20
 									? "daydream"
 									: "yawning";
-						const scenes: DelightReaction[] = [
-							"peekaboo",
-							timeOfDay,
-							...getCompanionIdleScenes(currentCharacter.current).flatMap(
-								(scene, i): DelightReaction[] => [
-									scene,
-									i % 2 === 0 ? "daydream" : timeOfDay,
-								],
-							),
-							"playful",
-							"daydream",
-						];
+						const [signature, ...discoveries] = getCompanionIdleScenes(
+							currentCharacter.current,
+						);
+						const scenes: CompanionTimedReaction[] = signature
+							? [
+									"peekaboo",
+									signature,
+									...discoveries.flatMap(
+										(scene, i): CompanionTimedReaction[] => [
+											i % 2 === 0 ? timeOfDay : "daydream",
+											scene,
+										],
+									),
+									"daydream",
+									"playful",
+								]
+							: ["peekaboo", timeOfDay, "playful", "daydream"];
 						const scene = scenes[nextScene.current % scenes.length];
-						const duration =
-							getCompanionScene(currentCharacter.current, scene)?.duration ??
-							(scene === "peekaboo" ? 4800 : scene === "playful" ? 4000 : 2600);
+						const duration = getCompanionReactionDuration(
+							currentCharacter.current,
+							scene,
+						);
 						if (
 							!origin.current &&
+							!chatVisible.current &&
 							!attention.current.hovered &&
 							!attention.current.focused &&
 							!reducedMotion.current &&
+							duration !== undefined &&
 							remaining >= duration
 						) {
-							play(scene, duration);
+							play(scene);
 							nextScene.current++;
 						}
 						schedule();
@@ -185,15 +185,19 @@ export function useCompanionInteraction(
 		},
 		[cancelAmbient, clear, play],
 	);
-	const approach = useCallback(() => {
-		if (sleeping.current) return;
-		if (ambient.current === "peekaboo") play("peeking", 2400);
-		else if (ambient.current !== "peeking") wake();
-	}, [play, wake]);
+	const approach = useCallback(
+		(passive = false) => {
+			if (sleeping.current) return;
+			if (ambient.current === "peekaboo") play("peeking");
+			else if (ambient.current !== "peeking" && (!passive || !ambient.current))
+				wake();
+		},
+		[play, wake],
+	);
 	const love = useCallback(() => {
 		const time = window.performance.now();
 		if (time - lastLovedAt.current < 2000) {
-			play("happy", 1200);
+			play("happy");
 			return;
 		}
 		lastLovedAt.current = time;
@@ -208,7 +212,7 @@ export function useCompanionInteraction(
 			) {
 				lastRewardAt.current = time;
 				affection.current = [];
-				play("starstruck", 1700);
+				play("starstruck");
 				return;
 			}
 		}
@@ -220,10 +224,10 @@ export function useCompanionInteraction(
 			!reducedMotion.current &&
 			++cuddles.current % 2 === 0
 		) {
-			play("cuddle", 4000);
+			play("cuddle");
 			return;
 		}
-		play("loved", 1200);
+		play("loved");
 	}, [play]);
 	const tap = useCallback(
 		(finding = false, waking = false) => {
@@ -235,7 +239,7 @@ export function useCompanionInteraction(
 			wake();
 			if (found || wasSleeping) {
 				taps.current.count = 0;
-				play(found ? "found" : "waking", found ? 1200 : 800);
+				play(found ? "found" : "waking");
 				return;
 			}
 			const time = window.performance.now();
@@ -244,7 +248,7 @@ export function useCompanionInteraction(
 			if (++taps.current.count >= 3) {
 				taps.current.count = 0;
 				love();
-			} else play("happy", 1200);
+			} else play("happy");
 		},
 		[love, play, wake],
 	);
@@ -358,6 +362,7 @@ export function useCompanionInteraction(
 	useEffect(() => {
 		currentMood.current = mood;
 		chatVisible.current = chatOpen;
+		chatActive.current = chatEngaged;
 		rub.current = null;
 		if (chatOpen || (mood !== "idle" && mood !== "complete")) {
 			if (currentCharacter.current === "inky") {
@@ -372,9 +377,9 @@ export function useCompanionInteraction(
 				origin.current.waking = false;
 			}
 		}
-		wake(chatOpen);
+		wake(chatEngaged);
 		return () => clear("idle");
-	}, [mood, chatOpen, wake, clear]);
+	}, [mood, chatOpen, chatEngaged, wake, clear]);
 	useEffect(() => {
 		const visibility = () => (document.hidden ? reset() : wake());
 		const blur = () => reset(true);
@@ -432,7 +437,7 @@ export function useCompanionInteraction(
 				setFocused(true);
 			},
 			onPointerEnter: (event: PointerEvent<HTMLButtonElement>) => {
-				approach();
+				approach(true);
 				if (event.pointerType !== "touch") {
 					attention.current.hovered = true;
 					setHovered(true);
@@ -461,7 +466,7 @@ export function useCompanionInteraction(
 				const waking = sleeping.current;
 				wake(false);
 				clear("reaction");
-				if (finding) play("peeking", 2400);
+				if (finding) play("peeking");
 				else setDelight(null);
 				origin.current = {
 					x: event.screenX,
@@ -491,7 +496,7 @@ export function useCompanionInteraction(
 					(origin.current && origin.current.pointerId !== event.pointerId)
 				)
 					return;
-				approach();
+				approach(true);
 				if (!sleeping.current) look(event);
 				pet(event);
 				if (
@@ -537,7 +542,7 @@ export function useCompanionInteraction(
 				setDragging(null);
 				if (gesture.moved) {
 					wake();
-					play("landing", 900);
+					play("landing");
 				} else if (greet) tap(gesture.finding, gesture.waking);
 				else {
 					clear("reaction");

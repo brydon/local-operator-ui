@@ -379,29 +379,6 @@ function createApplicationMenu(): void {
 	// Check if we're in development mode
 	const isDev = Boolean(process.env.ELECTRON_RENDERER_URL);
 
-	// Define zoom functions
-	const zoomInHandler = () => {
-		if (mainWindow) {
-			const webContents = mainWindow.webContents;
-			const currentZoom = webContents.getZoomFactor();
-			webContents.setZoomFactor(currentZoom + 0.1);
-		}
-	};
-
-	const zoomOutHandler = () => {
-		if (mainWindow) {
-			const webContents = mainWindow.webContents;
-			const currentZoom = webContents.getZoomFactor();
-			webContents.setZoomFactor(currentZoom - 0.1);
-		}
-	};
-
-	const actualSizeHandler = () => {
-		if (mainWindow) {
-			mainWindow.webContents.setZoomFactor(1.0);
-		}
-	};
-
 	// Create menu template
 	const template: Electron.MenuItemConstructorOptions[] = [
 		{
@@ -449,17 +426,19 @@ function createApplicationMenu(): void {
 				{
 					label: "Actual Size",
 					accelerator: "CmdOrCtrl+O",
-					click: actualSizeHandler,
+					click: () =>
+						changeWindowZoom(BrowserWindow.getFocusedWindow(), "reset"),
 				},
 				{
 					label: "Zoom In",
 					accelerator: "CmdOrCtrl+Plus", // On macOS, this often requires Shift as well (Cmd+Shift+=)
-					click: zoomInHandler,
+					click: () => changeWindowZoom(BrowserWindow.getFocusedWindow(), "in"),
 				},
 				{
 					label: "Zoom Out",
 					accelerator: "CmdOrCtrl+-",
-					click: zoomOutHandler,
+					click: () =>
+						changeWindowZoom(BrowserWindow.getFocusedWindow(), "out"),
 				},
 				{ type: "separator" as const },
 				{ role: "togglefullscreen" },
@@ -673,6 +652,22 @@ function createWindow(
 			 */
 			...rendererArgumentFlags(initialSession, openCatalogue),
 		},
+	});
+	applicationWindows.add(mainWindow);
+	mainWindow.webContents.on("before-input-event", (event, input) => {
+		if (input.type !== "keyDown" || !(input.control || input.meta)) return;
+		const direction =
+			input.key === "+" || input.key === "="
+				? "in"
+				: input.key === "-"
+					? "out"
+					: input.key.toLowerCase() === "o"
+						? "reset"
+						: null;
+		if (direction) {
+			changeWindowZoom(mainWindow, direction);
+			event.preventDefault();
+		}
 	});
 
 	/*
@@ -1063,6 +1058,7 @@ const devDriverWebPreferences =
 // Define mainWindow at a higher scope to be accessible in event handlers
 let mainWindow: BrowserWindow | null = null;
 let desktopCompanion: DesktopCompanion | null = null;
+const applicationWindows = new WeakSet<BrowserWindow>();
 
 /*
  * The update service of the most recent window, kept here rather than in the
@@ -1480,28 +1476,21 @@ function releaseHeldWindowFor(session: string): void {
 	}
 }
 
-// Define zoom functions for before-input-event, ensuring mainWindow is available
-const zoomInFromEvent = () => {
-	if (mainWindow) {
-		const webContents = mainWindow.webContents;
-		const currentZoom = webContents.getZoomFactor();
-		webContents.setZoomFactor(currentZoom + 0.1);
-	}
-};
-
-const zoomOutFromEvent = () => {
-	if (mainWindow) {
-		const webContents = mainWindow.webContents;
-		const currentZoom = webContents.getZoomFactor();
-		webContents.setZoomFactor(currentZoom - 0.1);
-	}
-};
-
-const actualSizeFromEvent = () => {
-	if (mainWindow) {
-		mainWindow.webContents.setZoomFactor(1.0);
-	}
-};
+/** Browser/auth windows have their own content; only zoom an app-owned surface. */
+function changeWindowZoom(
+	window: BrowserWindow | null,
+	direction: "in" | "out" | "reset",
+): void {
+	if (!window || window.isDestroyed()) return;
+	if (desktopCompanion?.changeZoom(window, direction)) return;
+	if (!applicationWindows.has(window)) return;
+	const contents = window.webContents;
+	contents.setZoomFactor(
+		direction === "reset"
+			? 1
+			: contents.getZoomFactor() + (direction === "in" ? 0.1 : -0.1),
+	);
+}
 
 // --- Single Instance Lock ---
 /*
@@ -2713,26 +2702,6 @@ app
 					openSessionInWindow(session, request, { fromPark: true }),
 				parked,
 			);
-
-			// Add before-input-event listener for zoom control
-			if (mainWindow) {
-				mainWindow.webContents.on("before-input-event", (event, input) => {
-					const isCmdOrCtrl = input.control || input.meta; // Ctrl on Win/Linux, Cmd on macOS
-
-					if (isCmdOrCtrl) {
-						if (input.key === "+" || input.key === "=") {
-							zoomInFromEvent();
-							event.preventDefault();
-						} else if (input.key === "-") {
-							zoomOutFromEvent();
-							event.preventDefault();
-						} else if (input.key === "O") {
-							actualSizeFromEvent();
-							event.preventDefault();
-						}
-					}
-				});
-			}
 
 			// Clean up any previous update service
 			if (updateService) {

@@ -172,6 +172,7 @@ export function companionStateFromCatalogue(body: unknown): CompanionState {
 export interface CompanionPreferences {
 	enabled: boolean;
 	character: string;
+	/** Intended position at 100% size; temporary chat/work-area clamping is not saved. */
 	position?: { x: number; y: number };
 }
 
@@ -237,6 +238,7 @@ export interface CompanionBridge {
 	openTask(): void;
 	showMenu(): void;
 	showNotifications(): void;
+	/** Intrinsic height in CSS pixels; main applies the companion's zoom factor. */
 	resizeChat(height: number): void;
 	getState(): Promise<CompanionState>;
 	onState(listener: (state: CompanionState) => void): () => void;

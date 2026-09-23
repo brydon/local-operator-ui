@@ -137,6 +137,12 @@ test(
 		const sent = await f.service.send("Hello");
 		assert.equal(sent.accepted, true);
 		assert.equal(sent.snapshot.status, "working");
+		assert.deepEqual(sent.snapshot.activeQuestion, {
+			id: f.messages()[0].requestId,
+			text: "Hello",
+		});
+		sent.snapshot.activeQuestion.text = "Cannot change the active question";
+		assert.equal(f.service.snapshot.activeQuestion.text, "Hello");
 		assert.equal(reads, 3);
 		oldRead.resolve(frame({ history: [row("old", "assistant", "Old reply")] }));
 		await poll;
@@ -144,6 +150,7 @@ test(
 		nextRead.resolve(frame({ generation: 1, last_turn_outcome: "completed" }));
 		await f.service.refresh();
 		assert.equal(f.service.snapshot.canSend, true);
+		assert.equal(f.service.snapshot.activeQuestion, undefined);
 		f.service.dispose();
 	},
 );
@@ -179,10 +186,15 @@ test("uncertain delivery permits only an exact retry with the same identity", as
 		const first = await f.service.send("Do this once");
 		assert.equal(first.accepted, false);
 		assert.equal(first.snapshot.sessionId, ID);
+		assert.equal(first.snapshot.pendingText, "Do this once");
+		assert.equal(first.snapshot.activeQuestion, undefined);
+		await f.service.refresh();
+		assert.equal(f.service.snapshot.pendingText, "Do this once");
 		const count = f.calls.length;
 		assert.equal((await f.service.send("Different task")).accepted, false);
 		assert.equal(f.calls.length, count);
 		assert.equal((await f.service.send("Do this once")).accepted, true);
+		assert.equal(f.service.snapshot.pendingText, undefined);
 		assert.deepEqual(f.messages()[0], f.messages()[1]);
 		assert.equal(
 			f.calls.filter((call) => call.op === "sessions.create").length,
@@ -200,6 +212,7 @@ test("definite refusals allow edits with a new request ID", async () => {
 			}
 		});
 		assert.equal((await f.service.send("/unsupported")).accepted, false);
+		assert.equal(f.service.snapshot.pendingText, undefined);
 		assert.equal((await f.service.send("A plain prompt")).accepted, true);
 		assert.notEqual(f.messages()[0].requestId, f.messages()[1].requestId);
 	}

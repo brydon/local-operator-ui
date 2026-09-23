@@ -13,6 +13,10 @@ export interface CompanionChatSnapshot {
 	status: "idle" | "loading" | "working" | "attention" | "error";
 	error: string | null;
 	canSend: boolean;
+	/** An unconfirmed send may only retry this exact text. */
+	pendingText?: string;
+	/** The admitted question, available before its transcript echo arrives. */
+	activeQuestion?: { id: string; text: string };
 }
 
 export interface CompanionChatSendResult {

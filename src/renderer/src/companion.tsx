@@ -14,13 +14,20 @@ import type {
 import "./assets/fonts/fonts.css";
 import "./styles/index.css";
 import "./companion.css";
-import type { CompanionAppearance } from "../../shared/companion-skin";
+import {
+	type CompanionAppearance,
+	isBuiltinCompanion,
+} from "../../shared/companion-skin";
 import { CompanionArt } from "./companion-art";
 import { CompanionChat } from "./companion-chat";
 import { useCompanionInteraction } from "./companion-interaction";
 import { useCompanionNotifications } from "./companion-notifications";
 import { useCompanionPlay } from "./companion-play";
-import { CompanionDream, CompanionPlayArt } from "./companion-play-art";
+import {
+	CompanionAffection,
+	CompanionDream,
+	CompanionPlayArt,
+} from "./companion-play-art";
 
 declare global {
 	interface Window {
@@ -95,6 +102,16 @@ function Companion() {
 		window.companion.getChat,
 		window.companion.onChat,
 	);
+	const [chatFocused, setChatFocused] = useState(false);
+	const [chatEngaged, setChatEngaged] = useState(false);
+	useEffect(() => {
+		if (!chat.open || chatFocused) {
+			setChatEngaged(chat.open && chatFocused);
+			return;
+		}
+		const timer = window.setTimeout(() => setChatEngaged(false), 1200);
+		return () => window.clearTimeout(timer);
+	}, [chat.open, chatFocused]);
 	const play = useCompanionPlay(
 		!chat.open && ["idle", "complete", "offline"].includes(state.mood),
 		appearance.id,
@@ -103,6 +120,7 @@ function Companion() {
 		state.mood,
 		chat.open || play.scene !== null,
 		appearance.id,
+		chatEngaged || play.scene !== null,
 	);
 	const playing = play.scene !== null;
 	useEffect(() => window.companion.onPlay(play.start), [play.start]);
@@ -116,14 +134,10 @@ function Companion() {
 		if (["grabbed", "dragging", "struggling"].includes(interaction.reaction))
 			play.cancel();
 	}, [interaction.reaction, play.cancel]);
-	const character =
-		appearance.id === "hoodie" ||
-		appearance.id === "pixel" ||
-		appearance.id === "inky"
-			? appearance.id
-			: "sprout";
+	const character = isBuiltinCompanion(appearance.id)
+		? appearance.id
+		: "sprout";
 	const [motion, setMotion] = useState<CompanionMotion>("rest");
-	const [chatFocused, setChatFocused] = useState(false);
 	const reaction =
 		motion !== "rest"
 			? motion
@@ -139,7 +153,7 @@ function Companion() {
 	).length;
 	const notice = useCompanionNotifications(
 		notifications,
-		chat.open || playing || interaction.isEngaged || motion !== "rest",
+		chatEngaged || playing || interaction.isEngaged || motion !== "rest",
 		state.mood !== "offline",
 	);
 	const notificationLabel = `${notifications.length} ${notifications.length === 1 ? "task" : "tasks"} with notifications${urgentCount ? `, ${urgentCount} ${urgentCount === 1 ? "needs" : "need"} you` : ""}`;
@@ -269,9 +283,9 @@ function Companion() {
 					{...interaction.handlers}
 					data-reaction={reaction}
 					aria-label={`${appearance.name}. ${playHint ?? `${sleeping ? "Sleeping. Click to wake." : `${state.label}. Click to pet.`} Use the chat button to talk. Drag or use arrow keys to move. Right-click for options.`}`}
+					title={state.mood === "offline" ? state.label : undefined}
 					onContextMenu={(event) => {
 						event.preventDefault();
-						notice.acknowledge();
 						play.cancel();
 						interaction.reset();
 						window.companion.showMenu();
@@ -336,7 +350,6 @@ function Companion() {
 							(event.shiftKey && event.key === "F10")
 						) {
 							event.preventDefault();
-							notice.acknowledge();
 							play.cancel();
 							interaction.reset();
 							window.companion.showMenu();
@@ -400,6 +413,10 @@ function Companion() {
 									<path d="M2 17h8l-8 8h8m4-21h9l-9 9h9" />
 								</svg>
 							)}
+							{!playing &&
+								(reaction === "loved" || reaction === "starstruck") && (
+									<CompanionAffection reaction={reaction} />
+								)}
 						</>
 					) : (
 						<CompanionArt
@@ -411,6 +428,15 @@ function Companion() {
 					)}
 					{play.scene && (
 						<CompanionPlayArt scene={play.scene} character={character} />
+					)}
+					{play.scene?.phase === "offer" && (
+						<span className={cn("companion-play-hint")} aria-hidden="true">
+							{play.scene.kind === "guess"
+								? "Left / Right"
+								: play.scene.kind === "bounce"
+									? "Enter to bounce"
+									: "Enter to share"}
+						</span>
 					)}
 					{sleeping && !customImage && <CompanionDream character={character} />}
 				</button>

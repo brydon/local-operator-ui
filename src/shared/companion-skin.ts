@@ -15,3 +15,12 @@ export const BUILTIN_COMPANIONS = [
 	{ id: "pixel", name: "Pixel", pixelated: true },
 	{ id: "inky", name: "Inky" },
 ] as const satisfies readonly CompanionAppearance[];
+
+export type BuiltinCompanionCharacter =
+	(typeof BUILTIN_COMPANIONS)[number]["id"];
+
+export function isBuiltinCompanion(
+	id: string,
+): id is BuiltinCompanionCharacter {
+	return BUILTIN_COMPANIONS.some((character) => character.id === id);
+}

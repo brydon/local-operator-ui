@@ -597,6 +597,25 @@
 	transform-origin: 50% 40%;
 }
 
+.companion-art[data-story] .companion-art-eyes {
+	animation: companion-story-return var(--companion-story-duration) linear both;
+}
+
+@keyframes companion-story-return {
+	0%,
+	87% {
+		transform: scaleY(1);
+	}
+	88%,
+	91% {
+		transform: scaleY(0.1);
+	}
+	96%,
+	100% {
+		transform: scaleY(1);
+	}
+}
+
 .companion-art-live-face {
 	transform: translate(var(--face-look-x), var(--face-look-y));
 	transition: transform 220ms ease-out;

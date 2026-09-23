@@ -1,6 +1,10 @@
 import { cn } from "@shared/lib/utils";
+import { useLayoutEffect, useRef } from "react";
 import type { BuiltinCompanionCharacter } from "./companion-art";
-import type { CompanionPlayScene } from "./companion-play";
+import {
+	COMPANION_BOUNCE_DURATION,
+	type CompanionPlayScene,
+} from "./companion-play";
 import "./companion-play-art.css";
 
 function Seed() {
@@ -53,6 +57,103 @@ function Treat({
 	);
 }
 
+function Ball({ scene }: { scene: CompanionPlayScene }) {
+	const element = useRef<SVGGElement>(null);
+	const position = useRef("translate(0, 0)");
+	useLayoutEffect(() => {
+		const ball = element.current;
+		if (!ball) return;
+		const preference = window.matchMedia("(prefers-reduced-motion: reduce)");
+		let animation: Animation | undefined;
+		const animate = () => {
+			const from = animation
+				? getComputedStyle(ball).transform
+				: position.current;
+			animation?.cancel();
+			animation = undefined;
+			const x = scene.side === "left" ? -28 : 28;
+			if (scene.phase === "offer") {
+				position.current = "translate(0, 0)";
+				ball.style.transform = position.current;
+				return;
+			}
+			if (preference.matches) {
+				position.current = `translate(${x * 0.65}px, 0)`;
+				ball.style.transform = position.current;
+				return;
+			}
+			ball.style.transform = from;
+			animation = ball.animate(
+				scene.phase === "playing"
+					? [
+							{ transform: from, easing: "cubic-bezier(0,.65,.45,1)" },
+							{
+								transform: `translate(${x / 2}px, -11px)`,
+								offset: 0.5,
+								easing: "cubic-bezier(.55,0,1,.5)",
+							},
+							{ transform: `translate(${x}px, 18px)` },
+						]
+					: [
+							{ transform: from },
+							{ transform: `translate(${x}px, 65px) rotate(30deg)` },
+						],
+				{
+					duration: scene.phase === "playing" ? COMPANION_BOUNCE_DURATION : 500,
+					fill: "forwards",
+				},
+			);
+		};
+		animate();
+		preference.addEventListener("change", animate);
+		return () => {
+			position.current = getComputedStyle(ball).transform;
+			animation?.cancel();
+			preference.removeEventListener("change", animate);
+		};
+	}, [scene.phase, scene.side]);
+	return (
+		<g className={cn("companion-play-ball")} ref={element}>
+			<circle
+				className={cn("companion-play-ball-body")}
+				cx="55"
+				cy="18"
+				r="7"
+			/>
+			<path
+				className={cn("companion-play-ball-seam")}
+				d="M49 14q6 7 12 0M49 22q6-5 12 0"
+			/>
+			<path className={cn("companion-play-detail")} d="m52 13-1 1" />
+		</g>
+	);
+}
+
+export function CompanionAffection({
+	reaction,
+}: { reaction: "loved" | "starstruck" }) {
+	return (
+		<svg
+			className={cn("companion-play-art companion-affection")}
+			viewBox="0 0 110 110"
+			aria-hidden="true"
+			focusable="false"
+		>
+			{reaction === "starstruck" ? (
+				<path
+					className={cn("companion-play-shiny")}
+					d="m18 20 2 5 5 2-5 2-2 5-2-5-5-2 5-2Zm75 7 2 5 5 2-5 2-2 5-2-5-5-2 5-2Z"
+				/>
+			) : (
+				<path
+					className={cn("companion-play-heart")}
+					d="M18 37l-4-4c-4-4 1-8 4-4c3-4 8 0 4 4Zm75-7-3-3c-3-3 1-6 3-3c2-3 6 0 3 3Z"
+				/>
+			)}
+		</svg>
+	);
+}
+
 export function CompanionPlayArt({
 	scene,
 	character,
@@ -95,19 +196,7 @@ export function CompanionPlayArt({
 				</g>
 			)}
 			{scene.kind === "bounce" && scene.phase !== "finish" && (
-				<g className={cn("companion-play-ball")} key={scene.step}>
-					<circle
-						className={cn("companion-play-ball-body")}
-						cx="55"
-						cy="18"
-						r="7"
-					/>
-					<path
-						className={cn("companion-play-ball-seam")}
-						d="M49 14q6 7 12 0M49 22q6-5 12 0"
-					/>
-					<path className={cn("companion-play-detail")} d="m52 13-1 1" />
-				</g>
+				<Ball scene={scene} />
 			)}
 			{scene.kind === "guess" &&
 				(["left", "right"] as const).map((side) => (
@@ -116,13 +205,26 @@ export function CompanionPlayArt({
 						transform={`translate(${side === "left" ? 22 : 88} 78)`}
 						data-chosen={scene.choice === side || undefined}
 					>
-						<path className={cn("companion-play-cuff")} d="M-7 6H7L6 11H-6Z" />
+						{character !== "inky" && (
+							<path
+								className={cn("companion-play-cuff")}
+								d="M-7 6H7L6 11H-6Z"
+							/>
+						)}
 						<path
-							className={cn("companion-play-mitten")}
+							className={cn(
+								character === "inky"
+									? "companion-play-tentacle"
+									: "companion-play-mitten",
+							)}
 							d={
-								revealed
-									? "M-9 2Q-13-5-8-5L-5-1V-8Q-3-12 0-8Q3-12 5-7Q9-9 10-4L9 3Q7 8 0 8Q-7 8-9 2Z"
-									: "M-9 2Q-12-3-9-5Q-6-7-5-3V-5Q-5-10 0-9Q9-10 10-4L9 3Q7 8 0 8Q-7 8-9 2Z"
+								character === "inky"
+									? revealed
+										? "M-9 10Q-14-2-7-8Q0-14 7-7Q11-2 6 1Q2 4-1 0Q-3-4 1-5Q-5-7-6-1Q-6 5 8 10Z"
+										: "M-9 10Q-13-1-7-7Q-1-13 6-7Q12-1 6 4Q0 8-4 2Q-6-2-2-4Q1-5 2-2Q2 0 0 0Q2 3 5 0Q7-4 1-6Q-5-7-6 0Q-6 6 8 10Z"
+									: revealed
+										? "M-9 2Q-13-5-8-5L-5-1V-8Q-3-12 0-8Q3-12 5-7Q9-9 10-4L9 3Q7 8 0 8Q-7 8-9 2Z"
+										: "M-9 2Q-12-3-9-5Q-6-7-5-3V-5Q-5-10 0-9Q9-10 10-4L9 3Q7 8 0 8Q-7 8-9 2Z"
 							}
 						/>
 						{revealed && scene.side === side && <Seed />}

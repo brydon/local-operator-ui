@@ -19,6 +19,34 @@ const scenes = {
 
 export type CompanionScene = keyof typeof scenes;
 
+const reactionDurations = {
+	happy: 1200,
+	loved: 1200,
+	waking: 800,
+	landing: 900,
+	stretching: 2600,
+	yawning: 2600,
+	daydream: 2600,
+	starstruck: 1700,
+	peekaboo: 4800,
+	peeking: 2400,
+	found: 1200,
+	playful: 4000,
+};
+
+export type CompanionTimedReaction =
+	| CompanionScene
+	| keyof typeof reactionDurations;
+
+export function getCompanionReactionDuration(
+	character: string,
+	reaction: string,
+): number | undefined {
+	return Object.prototype.hasOwnProperty.call(reactionDurations, reaction)
+		? reactionDurations[reaction as keyof typeof reactionDurations]
+		: getCompanionScene(character, reaction)?.duration;
+}
+
 const idleScenes = {
 	hoodie: ["paperboat", "relax", "scarf"],
 	pixel: ["lens", "balance", "firefly"],

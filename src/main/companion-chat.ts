@@ -25,6 +25,7 @@ interface PendingSend extends TurnPosition {
 
 interface TurnWait extends TurnPosition {
 	requestId: string;
+	text: string;
 	sawWorking: boolean;
 }
 
@@ -131,6 +132,10 @@ export class CompanionChatService {
 		return {
 			...this.state,
 			messages: this.state.messages.map((row) => ({ ...row })),
+			pendingText: this.pending?.text,
+			activeQuestion: this.waiting
+				? { id: this.waiting.requestId, text: this.waiting.text }
+				: undefined,
 		};
 	}
 
@@ -261,7 +266,7 @@ export class CompanionChatService {
 					: failed
 						? "The last turn stopped with an error. Open the app for details."
 						: this.pending
-							? "The earlier send is unconfirmed. Retry its original text to check safely."
+							? "The earlier send is unconfirmed. Retry original to check safely."
 							: null,
 			canSend: canSend && !this.sending,
 		});
@@ -310,7 +315,7 @@ export class CompanionChatService {
 			this.update({
 				status: "error",
 				error:
-					"The earlier send may have arrived. Retry its original text or open the app before sending something different.",
+					"The earlier send may have arrived. Retry original or open the app before sending something different.",
 			});
 			return outcome(false);
 		}
@@ -348,7 +353,7 @@ export class CompanionChatService {
 			};
 			this.pending = intent;
 			failure =
-				"Could not confirm the send. Retry the same message safely, or open the app to check.";
+				"Send unconfirmed. Retry original to check; your draft is saved.";
 			const reply = await this.options.requestDesktop({
 				op: "sessions.message",
 				sessionId: this.state.sessionId,
@@ -372,6 +377,7 @@ export class CompanionChatService {
 			this.pending = null;
 			this.waiting = {
 				requestId: intent.requestId,
+				text: intent.text,
 				sawWorking: false,
 				epoch: intent.epoch,
 				generation: intent.generation,

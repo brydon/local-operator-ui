@@ -45,6 +45,7 @@ export class DesktopCompanion {
 	private chat: CompanionChatService;
 	private chatOpen = false;
 	private chatHeight = COMPANION_CHAT_SIZE.height;
+	private zoomFactor = 1;
 	private preferences: CompanionPreferences;
 	private skins: CompanionSkinLibrary;
 	private state: CompanionState = COMPANION_OFFLINE;
@@ -95,6 +96,7 @@ export class DesktopCompanion {
 			return (await this.chat.send(text)).accepted;
 		});
 		ipcMain.on("companion:action", this.onAction);
+		screen.on("display-added", this.onDisplayChanged);
 		screen.on("display-removed", this.onDisplayChanged);
 		screen.on("display-metrics-changed", this.onDisplayChanged);
 		this.setEnabled(this.preferences.enabled);
@@ -232,12 +234,15 @@ export class DesktopCompanion {
 
 	private createWindow(): void {
 		this.reducedMotion = true;
+		this.zoomFactor = 1;
 		const area = screen.getPrimaryDisplay().workArea;
 		const point = this.preferences.position ?? {
 			x: area.x + area.width - COMPANION_SIZE.width - 24,
 			y: area.y + area.height - COMPANION_SIZE.height - 24,
 		};
 		const position = this.clamp(point);
+		this.preferences.position ??= position;
+		this.save();
 		const window = new BrowserWindow({
 			...COMPANION_SIZE,
 			...position,
@@ -278,6 +283,19 @@ export class DesktopCompanion {
 		window.webContents.on("will-attach-webview", (event) =>
 			event.preventDefault(),
 		);
+		window.webContents.on("before-input-event", (event, input) => {
+			if (input.type !== "keyDown" || !(input.control || input.meta)) return;
+			const direction =
+				input.key === "+" || input.key === "="
+					? "in"
+					: input.key === "-"
+						? "out"
+						: input.key.toLowerCase() === "o"
+							? "reset"
+							: null;
+			if (direction && this.changeZoom(window, direction))
+				event.preventDefault();
+		});
 		window.once("ready-to-show", () => {
 			if (this.enabled && this.window === window) this.present();
 		});
@@ -359,6 +377,7 @@ export class DesktopCompanion {
 
 	private showChat(): void {
 		if (!this.window) return;
+		this.finishDrag();
 		this.layoutChat(true);
 		void this.chat.open();
 		raiseWindow(this.window, this.options.headless ? "never" : "focus", {
@@ -367,31 +386,67 @@ export class DesktopCompanion {
 		});
 	}
 
-	/** Keep the lower-right anchor stable through expansion, collapse and dragging. */
+	/** Zoom only this window, including native bounds so controls keep their room. */
+	changeZoom(
+		window: BrowserWindow,
+		direction: "in" | "out" | "reset",
+	): boolean {
+		if (window !== this.window || window.isDestroyed() || !this.enabled)
+			return false;
+		this.cancelDrop();
+		this.finishDrag();
+		this.zoomFactor =
+			direction === "reset"
+				? 1
+				: Math.max(
+						0.8,
+						Math.min(
+							1.6,
+							Math.round(
+								(this.zoomFactor + (direction === "in" ? 0.1 : -0.1)) * 10,
+							) / 10,
+						),
+					);
+		this.layoutChat(this.chatOpen);
+		return true;
+	}
+
+	/** Layout clamping must not replace the position the user chose for the pet. */
 	private layoutChat(open: boolean): void {
 		this.cancelDrop();
 		if (!this.window) return;
-		const bounds = this.window.getBounds();
-		const area = screen.getDisplayMatching(bounds).workArea;
+		const anchor = this.preferences.position;
+		if (!anchor) return;
+		const area = screen.getDisplayMatching({
+			...anchor,
+			...COMPANION_SIZE,
+		}).workArea;
 		const target = open
 			? { width: COMPANION_CHAT_SIZE.width, height: this.chatHeight }
 			: COMPANION_SIZE;
+		// The renderer reports CSS pixels. Native bounds are display-independent
+		// pixels; scale both axes together and fit unusually small work areas.
+		const zoom = Math.min(
+			this.zoomFactor,
+			area.width / target.width,
+			area.height / target.height,
+		);
 		const size = {
-			width: Math.min(target.width, area.width),
-			height: Math.min(target.height, area.height),
+			width: Math.min(Math.ceil(target.width * zoom), area.width),
+			height: Math.min(Math.ceil(target.height * zoom), area.height),
 		};
 		const point = clampCompanionPosition(
 			{
-				x: bounds.x + bounds.width - size.width,
-				y: bounds.y + bounds.height - size.height,
+				x: anchor.x + COMPANION_SIZE.width - size.width,
+				y: anchor.y + COMPANION_SIZE.height - size.height,
 			},
 			area,
 			size,
 		);
 		this.chatOpen = open;
+		if (this.window.webContents.getZoomFactor() !== zoom)
+			this.window.webContents.setZoomFactor(zoom);
 		this.window.setBounds({ ...point, ...size }, false);
-		this.rememberPosition();
-		this.save();
 		this.publishChat();
 	}
 
@@ -412,12 +467,16 @@ export class DesktopCompanion {
 	}
 
 	private move(point: Electron.Point): void {
+		if (!this.window) return;
 		const position = this.clamp(point);
-		this.window?.setPosition(position.x, position.y, false);
+		const [x, y] = this.window.getPosition();
+		if (position.x === x && position.y === y) return;
+		this.window.setPosition(position.x, position.y, false);
 		this.rememberPosition();
 	}
 
 	private onDisplayChanged(): void {
+		this.finishDrag();
 		this.layoutChat(this.chatOpen);
 	}
 
@@ -476,6 +535,7 @@ export class DesktopCompanion {
 		this.dragOrigin = null;
 		if (!drag) return;
 		if (this.chatOpen) this.layoutChat(true);
+		this.save();
 	}
 
 	play(activity: CompanionActivity): void {
@@ -589,8 +649,11 @@ export class DesktopCompanion {
 		} else if (action === "open") this.showChat();
 		else if (action === "open-task")
 			this.options.openChat(this.state.sessionId);
-		else if (action === "collapse-chat") this.layoutChat(false);
-		else if (action === "expand-chat") {
+		else if (action === "collapse-chat") {
+			this.finishDrag();
+			this.layoutChat(false);
+		} else if (action === "expand-chat") {
+			this.finishDrag();
 			this.options.openChat(this.chat.snapshot.sessionId);
 			this.layoutChat(false);
 		} else if (
@@ -670,6 +733,7 @@ export class DesktopCompanion {
 		ipcMain.removeHandler("companion:get-chat");
 		ipcMain.removeHandler("companion:send");
 		ipcMain.removeListener("companion:action", this.onAction);
+		screen.removeListener("display-added", this.onDisplayChanged);
 		screen.removeListener("display-removed", this.onDisplayChanged);
 		screen.removeListener("display-metrics-changed", this.onDisplayChanged);
 		this.window?.destroy();

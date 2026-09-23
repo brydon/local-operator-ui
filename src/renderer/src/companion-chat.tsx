@@ -1,7 +1,13 @@
 import { Button } from "@shared/components/ui/button";
 import { Textarea } from "@shared/components/ui/textarea";
 import { cn } from "@shared/lib/utils";
-import { ArrowUp, ArrowUpRight, ChevronDown, Plus } from "lucide-react";
+import {
+	ArrowUp,
+	ArrowUpRight,
+	ChevronDown,
+	MessageCircle,
+	Plus,
+} from "lucide-react";
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type { CompanionChatSnapshot } from "../../shared/companion-chat";
 import { COMPANION_CHAT_MAX_CHARS } from "../../shared/companion-chat";
@@ -26,21 +32,37 @@ export function CompanionChat({
 	const [draft, setDraft] = useState("");
 	const [sending, setSending] = useState(false);
 	const [sendError, setSendError] = useState<string | null>(null);
+	const [showQuestion, setShowQuestion] = useState(false);
 	const composer = useRef<HTMLTextAreaElement>(null);
 	const transcript = useRef<HTMLElement>(null);
 	const sendButton = useRef<HTMLButtonElement>(null);
+	const retryButton = useRef<HTMLButtonElement>(null);
 	const composing = useRef(false);
 	const inFlight = useRef(false);
 	const hintId = useId();
 	const errorId = useId();
+	const questionId = useId();
 	const error =
 		snapshot.status === "attention" ? null : (snapshot.error ?? sendError);
 	const canSend = snapshot.canSend && !sending;
+	const pendingText = snapshot.pendingText;
+	const draftCanSend =
+		canSend && (pendingText === undefined || draft.trim() === pendingText);
 	const busy =
 		sending || snapshot.status === "working" || snapshot.status === "loading";
-	const reply = snapshot.messages
-		.filter((message) => message.role === "assistant")
-		.at(-1);
+	const roles = snapshot.messages.map((message) => message.role);
+	const replyIndex = roles.lastIndexOf("assistant");
+	const reply = snapshot.messages[replyIndex];
+	const questionIndex = roles.lastIndexOf("user");
+	const question = snapshot.activeQuestion ?? snapshot.messages[questionIndex];
+	const previousReply =
+		!!reply &&
+		(sending ||
+			questionIndex > replyIndex ||
+			(!!snapshot.activeQuestion &&
+				!snapshot.messages.some(
+					(message) => message.id === snapshot.activeQuestion?.id,
+				)));
 	const status = sending
 		? "Sending…"
 		: snapshot.status === "loading"
@@ -59,25 +81,40 @@ export function CompanionChat({
 	}, [snapshot.sessionId, reply?.id]);
 
 	useLayoutEffect(() => {
+		if (showQuestion && transcript.current) transcript.current.scrollTop = 0;
+	}, [showQuestion]);
+
+	useLayoutEffect(() => {
 		const input = composer.current;
 		if (!open || !input) return;
 		input.style.height = "32px";
 		input.style.height = `${Math.max(32, Math.min(64, input.scrollHeight))}px`;
 	});
 
-	async function submit() {
+	async function submit(retryOriginal = false) {
 		const submittedDraft = draft;
-		const text = submittedDraft.trim();
-		if (!text || !canSend || inFlight.current) return;
+		const text = retryOriginal ? pendingText : submittedDraft.trim();
+		if (
+			!text ||
+			!canSend ||
+			(!retryOriginal && !draftCanSend) ||
+			inFlight.current
+		)
+			return;
 		inFlight.current = true;
-		if (document.activeElement === sendButton.current) {
+		if (
+			document.activeElement === sendButton.current ||
+			document.activeElement === retryButton.current
+		) {
 			composer.current?.focus({ preventScroll: true });
 		}
 		setSending(true);
 		setSendError(null);
 		try {
 			if (await onSend(text)) {
-				setDraft((current) => (current === submittedDraft ? "" : current));
+				if (!retryOriginal || submittedDraft.trim() === text) {
+					setDraft((current) => (current === submittedDraft ? "" : current));
+				}
 			} else {
 				setSendError("Send could not be confirmed. Your draft is saved.");
 			}
@@ -107,26 +144,40 @@ export function CompanionChat({
 				}
 			}}
 		>
-			{reply && (
-				<section
-					ref={transcript}
-					className={cn(
-						"companion-chat-reply min-h-0 max-h-[120px] overflow-auto overscroll-contain px-1 py-0.5 [scrollbar-width:thin]",
-					)}
-					aria-label="Latest reply"
-					// biome-ignore lint/a11y/noNoninteractiveTabindex: The bounded reply needs keyboard focus for scrolling.
-					tabIndex={0}
-				>
+			<section
+				ref={transcript}
+				className={cn(
+					reply || (showQuestion && question)
+						? "companion-chat-reply min-h-0 max-h-[120px] overflow-auto overscroll-contain px-1 py-0.5 [scrollbar-width:thin]"
+						: "sr-only",
+				)}
+				aria-label={previousReply ? "Previous reply" : "Latest reply"}
+				tabIndex={reply || (showQuestion && question) ? 0 : undefined}
+			>
+				{showQuestion && question && (
 					<p
-						className={cn("whitespace-pre-wrap [overflow-wrap:anywhere]")}
-						aria-live="polite"
-						aria-atomic="true"
-						aria-busy={busy}
+						id={questionId}
+						className={cn(
+							"mb-1.5 whitespace-pre-wrap text-meta text-ink-muted [overflow-wrap:anywhere]",
+						)}
 					>
-						{reply.text}
+						Your last question: {question.text}
 					</p>
-				</section>
-			)}
+				)}
+				{previousReply && (
+					<span className={cn("block text-meta text-ink-muted")}>
+						Previous reply
+					</span>
+				)}
+				<p
+					className={cn("whitespace-pre-wrap [overflow-wrap:anywhere]")}
+					aria-live="polite"
+					aria-atomic="true"
+					aria-busy={busy}
+				>
+					{reply?.text}
+				</p>
+			</section>
 
 			<div className={cn("flex shrink-0 flex-col gap-1.5")}>
 				{snapshot.status === "attention" && (
@@ -158,6 +209,21 @@ export function CompanionChat({
 					>
 						{error}
 					</p>
+				)}
+				{pendingText !== undefined && snapshot.status !== "attention" && (
+					<Button
+						ref={retryButton}
+						type="button"
+						variant="secondary"
+						size="sm"
+						className={cn("self-start")}
+						aria-label="Retry original message"
+						title="Retry the original message; keep any edited draft"
+						disabled={!canSend}
+						onClick={() => void submit(true)}
+					>
+						Retry original
+					</Button>
 				)}
 				{status && !error && snapshot.status !== "attention" && (
 					<output
@@ -209,6 +275,25 @@ export function CompanionChat({
 						}}
 					/>
 					<div className={cn("flex min-h-8 shrink-0 items-center gap-0.5")}>
+						{question && (
+							<Button
+								type="button"
+								variant="ghost"
+								size="icon-sm"
+								className={cn("h-7 w-6")}
+								aria-label={
+									showQuestion ? "Hide last question" : "Show last question"
+								}
+								title={
+									showQuestion ? "Hide last question" : "Show last question"
+								}
+								aria-expanded={showQuestion}
+								aria-controls={showQuestion ? questionId : undefined}
+								onClick={() => setShowQuestion((shown) => !shown)}
+							>
+								<MessageCircle size={14} aria-hidden="true" />
+							</Button>
+						)}
 						{snapshot.sessionId && (
 							<Button
 								type="button"
@@ -220,6 +305,7 @@ export function CompanionChat({
 								disabled={busy}
 								onClick={() => {
 									setSendError(null);
+									setShowQuestion(false);
 									onNewChat();
 									composer.current?.focus({ preventScroll: true });
 								}}
@@ -246,7 +332,7 @@ export function CompanionChat({
 							className={cn("size-7")}
 							aria-label="Send message"
 							title="Send message"
-							disabled={!canSend || !draft.trim()}
+							disabled={!draftCanSend || !draft.trim()}
 						>
 							<ArrowUp size={16} aria-hidden="true" />
 						</Button>
