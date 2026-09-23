@@ -668,7 +668,7 @@ export function CompanionArt({
 				</span>
 				{sprite && (
 					<CompanionSprite
-						key={`${character}-${reaction}`}
+						key={`${character}-${reaction === "dozing" || reaction === "waking" ? "nap" : reaction}`}
 						character={character}
 						action={reaction as CompanionSpriteAction}
 					/>

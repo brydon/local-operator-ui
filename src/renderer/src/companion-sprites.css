@@ -24,6 +24,12 @@
 	max-width: none;
 }
 
+.companion-art-hoodie
+	.companion-sprite:is([data-action="dozing"], [data-action="waking"])
+	.companion-sprite-frame {
+	clip-path: inset(1% 0 0);
+}
+
 .companion-art-pixel .companion-sprite-sheet {
 	image-rendering: pixelated;
 }
@@ -170,6 +176,32 @@
 	85%,
 	100% {
 		transform: var(--sprite-offset-7);
+	}
+}
+
+.companion-sprite[data-ready][data-action="waking"] {
+	animation-name: companion-sprite-wake-overlay;
+}
+.companion-art:has(.companion-sprite[data-ready][data-action="waking"])
+	.companion-art-visual {
+	animation-name: companion-sprite-wake-underlay;
+}
+@keyframes companion-sprite-wake-overlay {
+	0%,
+	85% {
+		opacity: 1;
+	}
+	100% {
+		opacity: 0;
+	}
+}
+@keyframes companion-sprite-wake-underlay {
+	0%,
+	85% {
+		opacity: 0;
+	}
+	100% {
+		opacity: 1;
 	}
 }
 
