@@ -492,6 +492,38 @@ export class DesktopCompanion {
 		this.window.webContents.send("companion:play", activity);
 	}
 
+	private openNotification(sessionId: string): void {
+		if (
+			!this.enabled ||
+			this.disposed ||
+			!this.state.notifications.some((item) => item.sessionId === sessionId)
+		)
+			return;
+		this.layoutChat(false);
+		this.options.openChat(sessionId);
+	}
+
+	private get notificationMenu(): MenuItemConstructorOptions[] {
+		return this.state.notifications.map((item) => ({
+			label: `${item.title.length > 64 ? `${item.title.slice(0, 64)}…` : item.title} — ${item.label}`,
+			click: () => this.openNotification(item.sessionId),
+		}));
+	}
+
+	private showNotifications(): void {
+		this.cancelDrop();
+		this.finishDrag();
+		if (!this.window || this.state.notifications.length === 0) return;
+		if (this.state.notifications.length === 1) {
+			this.openNotification(this.state.notifications[0].sessionId);
+			return;
+		}
+		if (!this.options.headless)
+			Menu.buildFromTemplate(this.notificationMenu).popup({
+				window: this.window,
+			});
+	}
+
 	private showMenu(): void {
 		this.cancelDrop();
 		this.finishDrag();
@@ -505,6 +537,14 @@ export class DesktopCompanion {
 				enabled: !!this.state.sessionId,
 				click: () => this.options.openChat(this.state.sessionId),
 			},
+			...(this.state.notifications.length
+				? [
+						{
+							label: `Notifications (${this.state.notifications.length})`,
+							submenu: this.notificationMenu,
+						},
+					]
+				: []),
 			{
 				label: "Character",
 				submenu: this.characterMenu,
@@ -529,6 +569,7 @@ export class DesktopCompanion {
 		if (!this.trusted(event) || !this.window) return;
 		if (action === "hide") this.setEnabled(false);
 		else if (action === "menu") this.showMenu();
+		else if (action === "notifications") this.showNotifications();
 		else if (action === "reduced-motion" && typeof value === "boolean") {
 			this.reducedMotion = value;
 			if (value) this.cancelDrop();

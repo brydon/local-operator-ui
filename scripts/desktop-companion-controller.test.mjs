@@ -768,6 +768,95 @@ test("native menu stays scoped, cancels drag, and exposes character and hide con
 	assert.equal(f.menus.length, menusBeforeHide);
 });
 
+test("notifications include other agents and open the selected task without consuming its receipt", async (t) => {
+	const f = fixture(t, { headless: false });
+	const window = f.windows[0];
+	window.emit("ready-to-show");
+	await f.flush();
+	f.requests.shift().resolve(
+		ok({
+			sessions: [
+				{ id: "running", name: "Working elsewhere", status: { code: "busy" } },
+				{
+					id: "done",
+					name: "Draft complete",
+					status: { code: "complete" },
+					attention: { unseen: true },
+				},
+				{ id: "ask", name: "Choose a date", status: { code: "answer" } },
+				{ id: "approve", name: "Review changes", status: { code: "approval" } },
+			],
+		}),
+	);
+	await settle();
+	assert.equal(f.state().notifications.length, 3);
+	assert.deepEqual(window.presentations, ["inactive"]);
+	assert.deepEqual(f.opened, []);
+	f.action("notifications", undefined, {
+		sender: {},
+		senderFrame: window.webContents.mainFrame,
+	});
+	assert.equal(f.menus.length, 0);
+	f.action("notifications");
+	const picker = f.menus.at(-1);
+	assert.deepEqual(
+		Array.from(picker.template, (item) => item.label),
+		[
+			"Choose a date — Has a question",
+			"Review changes — Needs approval",
+			"Draft complete — Finished",
+		],
+	);
+	f.action("open");
+	assert.equal(f.chat().open, true);
+	picker.template[1].click();
+	assert.deepEqual(f.opened, ["approve"]);
+	assert.equal(f.chat().open, false);
+	assert.equal(f.state().notifications.length, 3);
+	assert.deepEqual(f.desktopRequests, []);
+	f.action("menu");
+	assert.equal(
+		f.menus.at(-1).template.find((item) => item.label === "Notifications (3)")
+			.submenu.length,
+		3,
+	);
+	f.companion.refresh();
+	await f.catalogue("idle", "approve");
+	picker.template[0].click();
+	assert.deepEqual(
+		f.opened,
+		["approve"],
+		"a vanished notification cannot open another task",
+	);
+	f.action("notifications");
+	assert.equal(f.state().notifications.length, 0);
+});
+
+test("a single notification opens directly and a hidden companion never opens a picker", async (t) => {
+	const f = fixture(t);
+	await f.catalogue("approval", "needs-you");
+	f.action("notifications");
+	assert.deepEqual(f.opened, ["needs-you"]);
+	assert.deepEqual(f.menus, []);
+	f.companion.refresh();
+	await f.flush();
+	f.requests.shift().resolve(
+		ok({
+			sessions: [
+				{ id: "one", status: { code: "answer" } },
+				{ id: "two", status: { code: "approval" } },
+			],
+		}),
+	);
+	await settle();
+	f.action("notifications");
+	assert.deepEqual(f.opened, ["needs-you"]);
+	assert.deepEqual(f.menus, []);
+	f.companion.setEnabled(false);
+	f.action("notifications");
+	assert.deepEqual(f.opened, ["needs-you"]);
+});
+
 test("play stays in the pet window and a stale menu cannot interrupt work or chat", async (t) => {
 	const f = fixture(t, { headless: false });
 	const window = f.windows[0];

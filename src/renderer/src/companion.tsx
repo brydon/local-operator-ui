@@ -2,7 +2,7 @@ import { Button } from "@shared/components/ui/button";
 import { cn } from "@shared/lib/utils";
 import { DEFAULT_THEME, applyThemeToDocument } from "@shared/themes";
 import type { ThemeName } from "@shared/themes";
-import { CircleAlert, MessageCircle } from "lucide-react";
+import { Bell, CircleAlert, MessageCircle } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { COMPANION_OFFLINE } from "../../shared/desktop-companion";
@@ -18,6 +18,7 @@ import type { CompanionAppearance } from "../../shared/companion-skin";
 import { CompanionArt } from "./companion-art";
 import { CompanionChat } from "./companion-chat";
 import { useCompanionInteraction } from "./companion-interaction";
+import { useCompanionNotifications } from "./companion-notifications";
 import { useCompanionPlay } from "./companion-play";
 import { CompanionDream, CompanionPlayArt } from "./companion-play-art";
 
@@ -129,8 +130,16 @@ function Companion() {
 				(interaction.reaction === "rest" || interaction.reaction === "curious")
 					? "listening"
 					: interaction.reaction));
-	const needsAttention =
-		!!state.sessionId && (state.mood === "attention" || state.mood === "error");
+	const notifications = state.notifications;
+	const urgentCount = notifications.filter(
+		(item) => item.kind !== "complete",
+	).length;
+	const notice = useCompanionNotifications(
+		notifications,
+		chat.open || playing || interaction.isEngaged || motion !== "rest",
+		state.mood !== "offline",
+	);
+	const notificationLabel = `${notifications.length} ${notifications.length === 1 ? "task" : "tasks"} with notifications${urgentCount ? `, ${urgentCount} ${urgentCount === 1 ? "needs" : "need"} you` : ""}`;
 	const sleeping =
 		reaction === "dozing" &&
 		(state.mood === "idle" || state.mood === "complete");
@@ -244,7 +253,11 @@ function Companion() {
 				)
 			}
 		>
-			<div className={cn("companion-pet")} data-engaged={interaction.isEngaged}>
+			<div
+				className={cn("companion-pet")}
+				data-engaged={interaction.isEngaged}
+				data-notifying={notice.nudging || undefined}
+			>
 				<button
 					type="button"
 					className={cn("companion-character")}
@@ -253,6 +266,7 @@ function Companion() {
 					aria-label={`${appearance.name}. ${playHint ?? `${sleeping ? "Sleeping. Click to wake." : `${state.label}. Click to pet.`} Use the chat button to talk. Drag or use arrow keys to move. Right-click for options.`}`}
 					onContextMenu={(event) => {
 						event.preventDefault();
+						notice.acknowledge();
 						play.cancel();
 						interaction.reset();
 						window.companion.showMenu();
@@ -316,6 +330,7 @@ function Companion() {
 							(event.shiftKey && event.key === "F10")
 						) {
 							event.preventDefault();
+							notice.acknowledge();
 							play.cancel();
 							interaction.reset();
 							window.companion.showMenu();
@@ -393,25 +408,39 @@ function Companion() {
 					)}
 					{sleeping && !customImage && <CompanionDream character={character} />}
 				</button>
-				{needsAttention && (
+				{notifications.length > 0 && (
 					<Button
 						type="button"
-						variant="secondary"
+						variant={urgentCount ? "primary" : "secondary"}
 						size="icon-sm"
-						className={cn("companion-task-toggle rounded-full")}
-						aria-label={
-							state.mood === "error"
-								? `Review task error${state.taskTitle ? `: ${state.taskTitle}` : ""}`
-								: `Review task request${state.taskTitle ? `: ${state.taskTitle}` : ""}`
-						}
+						className={cn(
+							"companion-task-toggle rounded-full text-meta font-medium tabular-nums",
+						)}
+						aria-label={notificationLabel}
+						aria-haspopup={notifications.length > 1 ? "menu" : undefined}
 						title={
-							state.taskTitle
-								? `${state.label}: ${state.taskTitle}`
-								: state.label
+							notifications.length === 1
+								? `${notifications[0].title} — ${notifications[0].label}`
+								: notificationLabel
 						}
-						onClick={() => window.companion.openTask()}
+						onClick={() => {
+							notice.acknowledge();
+							play.cancel();
+							interaction.reset();
+							window.companion.showNotifications();
+						}}
 					>
-						<CircleAlert aria-hidden="true" />
+						{notifications.length > 1 ? (
+							notifications.length > 99 ? (
+								"99+"
+							) : (
+								notifications.length
+							)
+						) : urgentCount ? (
+							<CircleAlert aria-hidden="true" />
+						) : (
+							<Bell aria-hidden="true" />
+						)}
 					</Button>
 				)}
 				<Button
@@ -429,6 +458,13 @@ function Companion() {
 			</div>
 			<output className={cn("sr-only")} aria-live="polite">
 				{acknowledgment}
+			</output>
+			<output
+				className={cn("companion-notice-announcement sr-only")}
+				aria-live="polite"
+				aria-atomic="true"
+			>
+				{notice.announcement}
 			</output>
 			<CompanionChat
 				snapshot={chat.snapshot}

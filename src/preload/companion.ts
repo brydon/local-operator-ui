@@ -28,6 +28,8 @@ const companion: CompanionBridge = {
 	setReducedMotion: (reduced) =>
 		ipcRenderer.send("companion:action", "reduced-motion", reduced),
 	showMenu: () => ipcRenderer.send("companion:action", "menu"),
+	showNotifications: () =>
+		ipcRenderer.send("companion:action", "notifications"),
 	resizeChat: (height) =>
 		ipcRenderer.send("companion:action", "chat-size", height),
 	getChat: () => ipcRenderer.invoke("companion:get-chat"),

@@ -32,6 +32,22 @@ test("gates take precedence over active work and unopened completions", () => {
 		mood: "attention",
 		label: "Needs you",
 		sessionId: "gate",
+		notifications: [
+			{
+				sessionId: "gate",
+				title: "Untitled task",
+				kind: "approval",
+				label: "Needs approval",
+				key: '["gate","approval",null]',
+			},
+			{
+				sessionId: "done",
+				title: "Untitled task",
+				kind: "complete",
+				label: "Finished",
+				key: '["done","complete",null]',
+			},
+		],
 	});
 	assert.equal(select(catalogue(row("ask", "answer"))).mood, "attention");
 });
@@ -45,6 +61,7 @@ test("attention identifies the selected task without leaking another task's titl
 	);
 	assert.equal(result.sessionId, "gate");
 	assert.equal(result.taskTitle, "Plan my trip");
+	assert.equal(result.notifications[0].title, "Plan my trip");
 	assert.equal(
 		select(catalogue(row("gate", "approval", { name: {} }))).taskTitle,
 		undefined,
@@ -52,6 +69,10 @@ test("attention identifies the selected task without leaking another task's titl
 });
 test("a previous completion receipt cannot make an active turn look finished", () => {
 	assert.equal(select(catalogue(row("a", "busy", unread))).mood, "working");
+	assert.deepEqual(
+		select(catalogue(row("a", "busy", unread))).notifications,
+		[],
+	);
 	assert.equal(
 		select(catalogue(row("a", "complete", unread))).mood,
 		"complete",
@@ -96,8 +117,141 @@ test("interrupted unread work is distinct from an unavailable backend", () => {
 		mood: "attention",
 		label: "Paused",
 		sessionId: "paused",
+		notifications: [
+			{
+				sessionId: "paused",
+				title: "Untitled task",
+				kind: "interrupted",
+				label: "Paused",
+				key: '["paused","interrupted",null]',
+			},
+		],
 	});
 });
+
+test("notifications include every waiting agent in stable urgency order", () => {
+	const result = select(
+		catalogue(
+			row("finished", "complete", unread),
+			row("paused", "interrupted", unread),
+			row("running", "busy", unread),
+			row("failed", "error", unread),
+			row("question", "answer", { attention: { unseen: false } }),
+			row("stuck", "wedged", { attention: { unseen: false } }),
+			row("permission", "approval", { attention: { unseen: false } }),
+		),
+	);
+	assert.deepEqual(
+		result.notifications.map(({ sessionId }) => sessionId),
+		["question", "permission", "failed", "stuck", "paused", "finished"],
+	);
+	assert.equal(result.sessionId, "question");
+	for (const code of ["wedged", "error", "interrupted"]) {
+		assert.equal(
+			select(catalogue(row("running", "busy"), row("needs-you", code, unread)))
+				.sessionId,
+			"needs-you",
+		);
+	}
+	assert.equal(
+		select(
+			catalogue(row("finished", "complete", unread), row("running", "busy")),
+		).sessionId,
+		"running",
+	);
+});
+
+test("resolved gates and read outcomes disappear on the next catalogue snapshot", () => {
+	for (const code of ["approval", "answer", "wedged"]) {
+		assert.equal(select(catalogue(row("a", code))).notifications.length, 1);
+		assert.deepEqual(select(catalogue(row("a", "busy"))).notifications, []);
+	}
+	for (const code of ["complete", "error", "interrupted"]) {
+		assert.equal(
+			select(catalogue(row("a", code, unread))).notifications.length,
+			1,
+		);
+		assert.deepEqual(
+			select(catalogue(row("a", code, { attention: { unseen: false } })))
+				.notifications,
+			[],
+		);
+	}
+	assert.deepEqual(select(catalogue()).notifications, []);
+});
+
+test("receipt keys change for a new outcome without copying unrelated metadata", () => {
+	for (const code of ["complete", "error", "interrupted"]) {
+		const notice = (token, extra = {}) =>
+			select(
+				catalogue(
+					row("a", code, {
+						attention: { unseen: true, completion_token: token, ...extra },
+					}),
+				),
+			).notifications[0];
+		assert.notEqual(notice("first").key, notice("second").key);
+		assert.equal(
+			notice("first").key,
+			notice("first", { revision: [10, 20], anchor_id: "private detail" }).key,
+		);
+		assert.equal(notice({ secret: "private detail" }).key, notice(null).key);
+	}
+	assert.equal(
+		select(
+			catalogue(
+				row("gate", "approval", { attention: { completion_token: "old" } }),
+			),
+		).notifications[0].key,
+		select(catalogue(row("gate", "approval"))).notifications[0].key,
+	);
+});
+
+test("malformed, archived, and duplicate rows cannot create extra notifications", () => {
+	const result = select(
+		catalogue(
+			null,
+			row(null, "approval"),
+			row("", "answer"),
+			row("   ", "wedged"),
+			row("archived", "answer", { archived: true }),
+			row("running", "busy"),
+			row("running", "complete", unread),
+			row("one", "approval", { name: "  Plan\nmy\ttrip  " }),
+			row("one", "approval", { name: "Duplicate" }),
+			row("two", "answer", { name: {} }),
+		),
+	);
+	assert.deepEqual(
+		result.notifications.map(({ sessionId, title }) => ({ sessionId, title })),
+		[
+			{ sessionId: "one", title: "Plan my trip" },
+			{ sessionId: "two", title: "Untitled task" },
+		],
+	);
+	const degraded = select({
+		result: { sessions: [row("gate", "approval")], degraded: ["attention"] },
+	});
+	assert.equal(degraded.mood, "offline");
+	assert.deepEqual(degraded.notifications, []);
+	assert.deepEqual(select(null).notifications, []);
+});
+test("new gate status revisions change notification identity without depending on titles", () => {
+	const request = (revision, name = "Choose a date") =>
+		select(
+			catalogue(
+				row("ask", "answer", {
+					name,
+					status_epoch: "owner",
+					status_revision: revision,
+				}),
+			),
+		).notifications[0].key;
+	assert.equal(request(3), request(3, "Renamed task"));
+	assert.notEqual(request(3), request(5));
+	assert.equal(request(-1), request(Number.NaN));
+});
+
 test("position restoration remains on the selected display, including negative coordinates", () => {
 	assert.deepEqual(
 		clampCompanionPosition(

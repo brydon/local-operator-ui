@@ -192,7 +192,31 @@ body {
 	}
 }
 
+.companion-pet[data-notifying] :is(.companion-art-pose, .companion-custom-art) {
+	animation: companion-notice 1400ms ease-in-out;
+}
+@keyframes companion-notice {
+	0%,
+	40%,
+	100% {
+		transform: none;
+	}
+	18% {
+		transform: translateY(-3px) rotate(-3deg);
+	}
+	60% {
+		transform: translateY(-2px) rotate(3deg);
+	}
+	78% {
+		transform: rotate(-1deg);
+	}
+}
+
 @media (prefers-reduced-motion: reduce) {
+	.companion-pet[data-notifying]
+		:is(.companion-art-pose, .companion-custom-art) {
+		animation: none;
+	}
 	.companion-chat:not([hidden]) {
 		animation: none;
 	}
