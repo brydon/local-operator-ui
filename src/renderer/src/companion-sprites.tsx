@@ -14,6 +14,8 @@ import "./companion-sprites.css";
 
 export type CompanionSpriteAction =
 	| "peekaboo"
+	| "peeking"
+	| "found"
 	| "playful"
 	| "dozing"
 	| "waking";
@@ -43,16 +45,41 @@ const offsets = {
 	},
 };
 
+const restingRegistration = {
+	sprout: {
+		peekaboo: "translate(0.77%, 4.03%) scale(1.015, 1.076)",
+		playful: "translate(-0.38%, 5.65%) scale(1.056, 1.061)",
+		nap: "translate(0.98%, 6.59%) scale(1.105, 1.058)",
+	},
+	hoodie: {
+		peekaboo: "translate(0.01%, -0.34%) scale(0.920, 1.013)",
+		playful: "translate(-1.30%, -1.63%) scale(0.970, 0.983)",
+		nap: "translate(0.64%, 1.03%) scale(0.932, 0.988)",
+	},
+	pixel: {
+		peekaboo: "translate(-0.46%, 0.66%) scale(0.915, 1.013)",
+		playful: "translate(0.78%, 0.51%) scale(0.920, 0.982)",
+		nap: "translate(-0.05%, 3.87%) scale(0.898, 1.031)",
+	},
+};
+
 export function CompanionSprite({
 	character,
 	action,
 }: { character: BuiltinCompanionCharacter; action: CompanionSpriteAction }) {
 	const [ready, setReady] = useState(false);
-	const sheet = action === "dozing" || action === "waking" ? "nap" : action;
+	const sheet =
+		action === "dozing" || action === "waking"
+			? "nap"
+			: action === "peeking" || action === "found"
+				? "peekaboo"
+				: action;
 	const registration = Object.fromEntries(
 		offsets[character][sheet].map((y, i) => [
 			`--sprite-offset-${i}`,
-			`translate(${sheet === "nap" && i === 4 ? (character === "hoodie" ? -3 : character === "pixel" ? -1.5 : 0) : 0}%, ${y}%)`,
+			i === 7
+				? restingRegistration[character][sheet]
+				: `translate(${sheet === "nap" && i === 4 ? (character === "hoodie" ? -3 : character === "pixel" ? -1.5 : 0) : 0}%, ${y}%)`,
 		]),
 	) as CSSProperties;
 	return (
@@ -62,14 +89,16 @@ export function CompanionSprite({
 			data-ready={ready || undefined}
 			style={registration}
 		>
-			<span className={cn("companion-sprite-frame")}>
-				<img
-					className={cn("companion-sprite-sheet")}
-					src={sheets[character][sheet]}
-					alt=""
-					draggable={false}
-					onLoad={() => setReady(true)}
-				/>
+			<span className={cn("companion-sprite-motion")}>
+				<span className={cn("companion-sprite-frame")}>
+					<img
+						className={cn("companion-sprite-sheet")}
+						src={sheets[character][sheet]}
+						alt=""
+						draggable={false}
+						onLoad={() => setReady(true)}
+					/>
+				</span>
 			</span>
 		</span>
 	);

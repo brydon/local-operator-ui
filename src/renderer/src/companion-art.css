@@ -723,24 +723,60 @@
 	}
 }
 
+.companion-art-struggle-rest {
+	opacity: 0;
+	animation: companion-art-struggle-rest var(--companion-art-wriggle)
+		steps(1, end) infinite;
+}
+
+.companion-art-struggle-effort,
+.companion-art[data-reaction="struggling"] .companion-art-mouth {
+	animation: companion-art-struggle-effort var(--companion-art-wriggle)
+		steps(1, end) infinite;
+}
+
+@keyframes companion-art-struggle-rest {
+	0%,
+	44% {
+		opacity: 0;
+	}
+	60%,
+	100% {
+		opacity: 1;
+	}
+}
+
+@keyframes companion-art-struggle-effort {
+	0%,
+	44% {
+		opacity: 1;
+	}
+	60%,
+	100% {
+		opacity: 0;
+	}
+}
+
 @keyframes companion-art-hoodie-kick {
 	0%,
 	22%,
-	44%,
-	100% {
+	44% {
 		background-position: 66.666667% 0;
 	}
 	11%,
 	33% {
 		background-position: 100% 0;
 	}
+	60%,
+	100% {
+		background-position: 0 0;
+	}
 }
 
 @keyframes companion-art-hoodie-look {
 	0%,
 	22%,
-	44%,
-	100% {
+	44% {
 		left: 34%;
 		top: 31%;
 		transform: rotate(-5deg);
@@ -750,6 +786,12 @@
 		left: 34%;
 		top: 31%;
 		transform: rotate(5deg);
+	}
+	60%,
+	100% {
+		left: 33%;
+		top: 31%;
+		transform: none;
 	}
 }
 
@@ -1294,6 +1336,9 @@
 			.companion-art-brow-left,
 			.companion-art-brow-right,
 			.companion-art-live-mouth,
+			.companion-art-mouth,
+			.companion-art-struggle-rest,
+			.companion-art-struggle-effort,
 			.companion-art-task-eye,
 			.companion-art-task-brows,
 			.companion-art-vignette-rest,

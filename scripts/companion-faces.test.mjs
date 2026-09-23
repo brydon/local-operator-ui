@@ -165,28 +165,34 @@ const attentive = new Set([
 ]);
 
 test("a varied, mostly cheerful cycle bridges brief special faces with everyday ones", async () => {
-	await fixture(async ({ emotion, step }) => {
-		const seen = new Set([emotion()]);
-		const recent = [emotion()];
-		let subduedCount = 0;
-		for (let i = 0; i < 400; i++) {
-			const previous = emotion();
-			if (uncommon.has(previous))
-				assert.ok(timers.values().next().value.delay <= 2800);
-			const next = await step();
-			assert.ok(!recent.includes(next), "avoid the last four expressions");
-			if (uncommon.has(previous)) assert.ok(!uncommon.has(next));
-			if (subdued.has(next)) subduedCount++;
-			recent.push(next);
-			if (recent.length > 4) recent.shift();
-			seen.add(next);
-		}
-		assert.ok(seen.size >= 22, `only saw ${seen.size} expressions`);
-		assert.ok(
-			seen.has("adoring") && seen.has("caret joy") && seen.has("starry"),
-		);
-		assert.ok(subduedCount < 48, "non-cheerful beats stay a small minority");
-	});
+	for (const character of ["sprout", "hoodie", "pixel"])
+		await fixture(async ({ render, emotion, step }) => {
+			await render({ character });
+			const seen = new Set([emotion()]);
+			const recent = [emotion()];
+			let subduedCount = 0;
+			for (let i = 0; i < 1600; i++) {
+				const previous = emotion();
+				if (uncommon.has(previous))
+					assert.ok(timers.values().next().value.delay <= 2800);
+				const next = await step();
+				assert.ok(!recent.includes(next), "avoid the last four expressions");
+				if (uncommon.has(previous)) assert.ok(!uncommon.has(next));
+				if (subdued.has(next)) subduedCount++;
+				recent.push(next);
+				if (recent.length > 4) recent.shift();
+				seen.add(next);
+			}
+			assert.equal(
+				seen.size,
+				31,
+				`${character} retains the full expression repertoire`,
+			);
+			assert.ok(
+				seen.has("adoring") && seen.has("caret joy") && seen.has("starry"),
+			);
+			assert.ok(subduedCount < 192, "non-cheerful beats stay a small minority");
+		});
 });
 
 test("touch and task interruptions resume variety instead of resetting the face", async () => {

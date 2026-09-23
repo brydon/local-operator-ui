@@ -10,10 +10,13 @@ When a task needs attention, the alert button opens that task directly.
 Brush back and forth over their head or tap a few times for a little heart reaction.
 Pick them up to see them dangle and wriggle; releasing gives them a short fall and
 a soft landing. All companions sleep after 90 quiet seconds, including after completed
-tasks, and wake when you interact. They stay awake while chat is open. Quiet moments bring games of peekaboo, little dances, and a full curl-up at bedtime. Morning brings a stretch, daytime
-brings a character-specific diversion, and late night brings a yawn. A little extra
-affection can reveal a surprise. These use your local clock and pause for interaction
-or work. Reduced motion skips idle antics, keeps reactions still, and disables the drop.
+tasks. Click or move them to wake them; passing the pointer over them lets them sleep.
+They stay awake while chat is open. During peekaboo, approach to get a little peek,
+then click to find them. Quiet moments bring little dances and a full curl-up at bedtime.
+Morning brings a stretch, daytime brings a character-specific diversion, and late night
+brings a yawn. A little extra affection can reveal a surprise. These use your local clock
+and give way to chat or work. Reduced motion skips idle antics, keeps reactions still,
+and disables the drop.
 
 ## Custom characters
 

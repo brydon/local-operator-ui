@@ -276,7 +276,7 @@ test("chat keeps the companion awake; waking yields immediately to a new grab", 
 		await chat(false);
 		await advance(90_000);
 		await event("pointerover");
-		assert.equal(button.dataset.reaction, "waking");
+		assert.equal(button.dataset.reaction, "dozing");
 		await event("pointerdown");
 		assert.equal(button.dataset.reaction, "pressed");
 		await event("pointermove", { screenX: 120 });
@@ -335,12 +335,8 @@ test("idle scenes rotate before the time-of-day gesture and keep the sleep deadl
 	});
 });
 
-test("ambient gestures yield to attention, task changes, chat, hiding and reduced motion", async () => {
+test("ambient gestures yield to task changes, chat, hiding and reduced motion", async () => {
 	for (const interrupt of [
-		(f) => f.event("pointerover"),
-		(f) => f.event("pointermove"),
-		(f) => f.event("pointerdown"),
-		(f) => act(async () => f.button.focus()),
 		(f) => f.mood("working"),
 		(f) => f.chat(true),
 		(f) => f.visibility(true),
@@ -375,6 +371,8 @@ test("interrupting an idle scene advances to a different game next time", async 
 		await advance(14_000);
 		assert.equal(button.dataset.reaction, "peekaboo");
 		await event("pointerover");
+		await event("pointerdown");
+		await event("pointerup");
 		await event("pointerout");
 		await advance(14_000);
 		assert.equal(button.dataset.reaction, "playful");
@@ -382,6 +380,84 @@ test("interrupting an idle scene advances to a different game next time", async 
 		await advance(36_000);
 		assert.equal(button.dataset.reaction, "curious");
 	});
+});
+
+test("approaching peekaboo invites a bounded peek; a deliberate tap reveals the pet", async () => {
+	await fixture(async ({ button, event, advance, released }) => {
+		await advance(14_000);
+		await event("pointerover");
+		assert.equal(button.dataset.reaction, "peeking");
+		await advance(1000);
+		await event("pointermove");
+		await advance(1399);
+		assert.equal(button.dataset.reaction, "peeking");
+		await advance(1);
+		assert.equal(button.dataset.reaction, "curious");
+		assert.equal(released(), undefined);
+	});
+	for (const keyboard of [false, true]) {
+		await fixture(async ({ button, event, advance, released }) => {
+			await advance(14_000);
+			await act(async () =>
+				window.dispatchEvent(new dom.window.Event("focus")),
+			);
+			assert.equal(button.dataset.reaction, "peekaboo");
+			if (keyboard) {
+				await act(async () => button.focus());
+				assert.equal(button.dataset.reaction, "peeking");
+				await event("click");
+			} else {
+				await event("pointerover");
+				await event("pointerdown");
+				await act(async () => button.focus());
+				await advance(450);
+				assert.equal(button.dataset.reaction, "peeking");
+				await event("pointermove", { screenX: 106 });
+				await event("pointerup");
+				assert.equal(released(), "tap");
+			}
+			assert.equal(button.dataset.reaction, "found");
+			await event("pointermove");
+			await advance(1199);
+			assert.equal(button.dataset.reaction, "found");
+			await advance(1);
+			assert.equal(button.dataset.reaction, "curious");
+		});
+	}
+});
+
+test("finding yields immediately to pickup, task updates and chat", async () => {
+	await fixture(async ({ button, event, advance, released }) => {
+		await advance(14_000);
+		await event("pointerdown");
+		await event("pointermove", { screenX: 107 });
+		assert.equal(button.dataset.reaction, "grabbed");
+		await event("pointerup");
+		assert.equal(released(), "drag");
+		assert.equal(button.dataset.reaction, "landing");
+		await advance(1200);
+		assert.equal(button.dataset.reaction, "rest");
+	});
+	for (const interrupt of [(f) => f.mood("working"), (f) => f.chat(true)]) {
+		await fixture(async (f) => {
+			await f.advance(14_000);
+			await f.event("click");
+			assert.equal(f.button.dataset.reaction, "found");
+			await interrupt(f);
+			assert.equal(f.button.dataset.reaction, "rest");
+			await f.advance(1200);
+			assert.equal(f.button.dataset.reaction, "rest");
+			assert.equal(timers.size, 0);
+		});
+		await fixture(async (f) => {
+			await f.advance(14_000);
+			await f.event("pointerdown");
+			assert.equal(f.button.dataset.reaction, "peeking");
+			await interrupt(f);
+			await f.event("pointerup");
+			assert.notEqual(f.button.dataset.reaction, "found");
+		});
+	}
 });
 
 test("a rare reward needs four recent accepted loves and respects its cooldown", async () => {
@@ -492,6 +568,8 @@ test("idle and completed companions sleep, while live task states stay awake", a
 		await advance(1);
 		assert.equal(button.dataset.reaction, "dozing");
 		await event("pointerover");
+		assert.equal(button.dataset.reaction, "dozing");
+		await event("click");
 		assert.equal(button.dataset.reaction, "waking");
 		await advance(800);
 		assert.equal(button.dataset.reaction, "curious");
@@ -510,6 +588,8 @@ test("idle and completed companions sleep, while live task states stay awake", a
 		await advance(1);
 		assert.equal(button.dataset.reaction, "dozing");
 		await event("pointerover");
+		await event("pointerdown");
+		await event("pointerup");
 		assert.equal(button.dataset.reaction, "waking");
 		await advance(800);
 		await event("pointerout");
@@ -525,6 +605,51 @@ test("idle and completed companions sleep, while live task states stay awake", a
 		await advance(90_000);
 		assert.equal(button.dataset.reaction, "dozing");
 	});
+});
+
+test("passing over or rubbing a sleeping pet leaves it asleep until an intentional greeting", async () => {
+	await fixture(async ({ button, event, advance, gaze, released }) => {
+		await advance(90_000);
+		await event("pointerover");
+		for (const screenX of [100, 120, 100, 120, 100])
+			await event("pointermove", { screenX, clientY: 40 });
+		await advance(5000);
+		assert.equal(button.dataset.reaction, "dozing");
+		assert.deepEqual(gaze(), { x: 0, y: 0 });
+		assert.equal(timers.size, 0);
+		assert.equal(frames.size, 0);
+		await event("pointerout");
+		await event("pointerdown");
+		await event("pointermove", { screenX: 106 });
+		await event("pointerup");
+		assert.equal(released(), "tap");
+		assert.equal(button.dataset.reaction, "waking");
+		await advance(800);
+		assert.equal(button.dataset.reaction, "rest");
+	});
+});
+
+test("window activation before a click preserves the wake animation", async () => {
+	for (const keyboard of [false, true]) {
+		await fixture(async ({ button, event, advance }) => {
+			await advance(90_000);
+			await act(async () =>
+				window.dispatchEvent(new dom.window.Event("focus")),
+			);
+			assert.equal(button.dataset.reaction, "dozing");
+			if (keyboard) await act(async () => button.focus());
+			else {
+				await event("pointerdown");
+				await act(async () => button.focus());
+				await event("pointerup");
+			}
+			assert.equal(button.dataset.reaction, "waking");
+			await advance(799);
+			assert.equal(button.dataset.reaction, "waking");
+			await advance(1);
+			assert.equal(button.dataset.reaction, "curious");
+		});
+	}
 });
 
 test("cancellation clears gestures and restarts sleep for visible companions", async () => {

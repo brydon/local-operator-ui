@@ -16,6 +16,8 @@ type DelightReaction =
 	| "daydream"
 	| "starstruck"
 	| "peekaboo"
+	| "peeking"
+	| "found"
 	| "playful";
 
 export function useCompanionInteraction(
@@ -37,6 +39,8 @@ export function useCompanionInteraction(
 		pointerId: number;
 		target: HTMLButtonElement;
 		moved: boolean;
+		finding: boolean;
+		waking: boolean;
 	} | null>(null);
 	const rub = useRef<{
 		x: number;
@@ -50,7 +54,7 @@ export function useCompanionInteraction(
 	const affection = useRef<number[]>([]);
 	const taps = useRef({ count: 0, started: 0 });
 	const attention = useRef({ hovered: false, focused: false });
-	const ambient = useRef(false);
+	const ambient = useRef<DelightReaction | null>(null);
 	const nextScene = useRef(0);
 	const reducedMotion = useRef(false);
 	const sleeping = useRef(false);
@@ -76,11 +80,14 @@ export function useCompanionInteraction(
 				reaction === "yawning" ||
 				reaction === "daydream" ||
 				reaction === "peekaboo" ||
-				reaction === "playful";
+				reaction === "peeking" ||
+				reaction === "playful"
+					? reaction
+					: null;
 			setDelight(reaction);
 			timers.current.reaction = window.setTimeout(() => {
 				timers.current.reaction = 0;
-				ambient.current = false;
+				ambient.current = null;
 				setDelight(null);
 			}, duration);
 		},
@@ -88,7 +95,7 @@ export function useCompanionInteraction(
 	);
 	const cancelAmbient = useCallback(() => {
 		if (!ambient.current) return;
-		ambient.current = false;
+		ambient.current = null;
 		clear("reaction");
 		setDelight(null);
 	}, [clear]);
@@ -162,6 +169,11 @@ export function useCompanionInteraction(
 		},
 		[cancelAmbient, clear, play],
 	);
+	const approach = useCallback(() => {
+		if (sleeping.current) return;
+		if (ambient.current === "peekaboo") play("peeking", 2400);
+		else if (ambient.current !== "peeking") wake();
+	}, [play, wake]);
 	const love = useCallback(() => {
 		const time = window.performance.now();
 		if (time - lastLovedAt.current < 2000) {
@@ -186,16 +198,29 @@ export function useCompanionInteraction(
 		}
 		play("loved", 1200);
 	}, [play]);
-	const tap = useCallback(() => {
-		wake();
-		const time = window.performance.now();
-		if (time - taps.current.started > 1000)
-			taps.current = { count: 0, started: time };
-		if (++taps.current.count >= 3) {
-			taps.current.count = 0;
-			love();
-		} else play("happy", 1200);
-	}, [love, play, wake]);
+	const tap = useCallback(
+		(finding = false, waking = false) => {
+			const found =
+				finding ||
+				ambient.current === "peekaboo" ||
+				ambient.current === "peeking";
+			const wasSleeping = waking || sleeping.current;
+			wake();
+			if (found || wasSleeping) {
+				taps.current.count = 0;
+				play(found ? "found" : "waking", found ? 1200 : 800);
+				return;
+			}
+			const time = window.performance.now();
+			if (time - taps.current.started > 1000)
+				taps.current = { count: 0, started: time };
+			if (++taps.current.count >= 3) {
+				taps.current.count = 0;
+				love();
+			} else play("happy", 1200);
+		},
+		[love, play, wake],
+	);
 	const cleanup = useCallback(() => {
 		clear("idle");
 		clear("hold");
@@ -207,7 +232,7 @@ export function useCompanionInteraction(
 		taps.current.count = 0;
 		affection.current = [];
 		attention.current = { hovered: false, focused: false };
-		ambient.current = false;
+		ambient.current = null;
 		sleeping.current = false;
 		if (gesture?.target.hasPointerCapture(gesture.pointerId))
 			gesture.target.releasePointerCapture(gesture.pointerId);
@@ -229,6 +254,8 @@ export function useCompanionInteraction(
 		const time = window.performance.now();
 		if (
 			origin.current ||
+			sleeping.current ||
+			ambient.current === "peeking" ||
 			(currentMood.current !== "idle" && currentMood.current !== "complete") ||
 			event.pointerType === "touch" ||
 			event.clientY > bounds.top + bounds.height * 0.6
@@ -290,12 +317,27 @@ export function useCompanionInteraction(
 		currentMood.current = mood;
 		chatVisible.current = chatOpen;
 		rub.current = null;
+		if (chatOpen || (mood !== "idle" && mood !== "complete")) {
+			clear("reaction");
+			setDelight(null);
+			if (origin.current) {
+				origin.current.finding = false;
+				origin.current.waking = false;
+			}
+		}
 		wake(chatOpen);
 		return () => clear("idle");
 	}, [mood, chatOpen, wake, clear]);
 	useEffect(() => {
 		const visibility = () => (document.hidden ? reset() : wake());
-		const focus = () => wake();
+		const focus = () => {
+			if (
+				!sleeping.current &&
+				ambient.current !== "peekaboo" &&
+				ambient.current !== "peeking"
+			)
+				wake();
+		};
 		window.addEventListener("blur", reset);
 		window.addEventListener("focus", focus);
 		document.addEventListener("visibilitychange", visibility);
@@ -327,17 +369,20 @@ export function useCompanionInteraction(
 		handlers: {
 			onFocus: () => {
 				attention.current.focused = true;
-				wake();
+				if (!origin.current) {
+					if (sleeping.current) wake();
+					else approach();
+				}
 				setFocused(true);
 			},
 			onBlur: reset,
 			onPointerEnter: (event: PointerEvent<HTMLButtonElement>) => {
-				wake();
+				approach();
 				if (event.pointerType !== "touch") {
 					attention.current.hovered = true;
 					setHovered(true);
 				}
-				look(event);
+				if (!sleeping.current) look(event);
 			},
 			onPointerLeave: () => {
 				rub.current = null;
@@ -354,21 +399,33 @@ export function useCompanionInteraction(
 					origin.current
 				)
 					return;
-				wake();
+				const finding =
+					ambient.current === "peekaboo" || ambient.current === "peeking";
+				const waking = sleeping.current;
+				wake(false);
 				clear("reaction");
-				setDelight(null);
+				if (finding) play("peeking", 2400);
+				else setDelight(null);
 				origin.current = {
 					x: event.screenX,
 					y: event.screenY,
 					pointerId: event.pointerId,
 					target: event.currentTarget,
 					moved: false,
+					finding,
+					waking,
 				};
 				setPressed(true);
 				look(event);
 				timers.current.hold = window.setTimeout(() => {
 					timers.current.hold = 0;
-					if (origin.current && !origin.current.moved) setDelight("happy");
+					if (
+						origin.current &&
+						!origin.current.moved &&
+						!origin.current.finding &&
+						!origin.current.waking
+					)
+						setDelight("happy");
 				}, 450);
 			},
 			onPointerMove: (event: PointerEvent<HTMLButtonElement>) => {
@@ -377,8 +434,8 @@ export function useCompanionInteraction(
 					(origin.current && origin.current.pointerId !== event.pointerId)
 				)
 					return;
-				wake();
-				look(event);
+				approach();
+				if (!sleeping.current) look(event);
 				pet(event);
 				if (
 					origin.current &&
@@ -392,6 +449,7 @@ export function useCompanionInteraction(
 					gesture.moved = true;
 					taps.current.count = 0;
 					clear("hold");
+					cancelAmbient();
 					setDelight(null);
 					setDragging("grabbed");
 					timers.current.hold = window.setTimeout(() => {
@@ -422,7 +480,7 @@ export function useCompanionInteraction(
 				if (gesture.moved) {
 					wake();
 					play("landing", 900);
-				} else tap();
+				} else tap(gesture.finding, gesture.waking);
 				return gesture.moved ? "drag" : "tap";
 			},
 			onLostPointerCapture: () => {

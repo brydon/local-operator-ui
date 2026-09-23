@@ -119,14 +119,16 @@ function Companion() {
 		appearance.frames?.[state.mood],
 		appearance.frames?.idle,
 	].find((source) => source && !failedImages.includes(source));
-	const affection =
+	const acknowledgment =
 		reaction === "loved"
 			? `${appearance.name} sends you a heart.`
 			: reaction === "starstruck"
 				? `${appearance.name} lights up with delight.`
 				: reaction === "happy"
 					? `${appearance.name} looks happy.`
-					: "";
+					: reaction === "found"
+						? `You found ${appearance.name}.`
+						: "";
 	useEffect(() => {
 		const unsubscribe = window.companion.onMotion(setMotion);
 		const preference = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -362,7 +364,7 @@ function Companion() {
 				</Button>
 			</div>
 			<output className={cn("sr-only")} aria-live="polite">
-				{affection}
+				{acknowledgment}
 			</output>
 			<CompanionChat
 				snapshot={chat.snapshot}

@@ -31,6 +31,8 @@ export type CompanionReaction =
 	| "daydream"
 	| "starstruck"
 	| "peekaboo"
+	| "peeking"
+	| "found"
 	| "playful";
 
 const artwork: Record<BuiltinCompanionCharacter, string> = {
@@ -337,6 +339,45 @@ const faceBeats: FaceBeat[] = [
 	},
 ];
 
+const faceHabits: Record<
+	BuiltinCompanionCharacter,
+	{ favorites: string[]; after: Record<string, string[]> }
+> = {
+	sprout: {
+		favorites: ["curious", "beaming", "content", "dreamy", "whistling"],
+		after: {
+			curious: ["beaming", "amazed"],
+			beaming: ["content", "soft smile"],
+			amazed: ["caret joy"],
+			whistling: ["content", "dreamy"],
+		},
+	},
+	hoodie: {
+		favorites: [
+			"bashful",
+			"soft smile",
+			"right wink",
+			"sheepish",
+			"little smile",
+		],
+		after: {
+			"right wink": ["bashful"],
+			bashful: ["soft smile", "smitten"],
+			smitten: ["little smile"],
+			"little pout": ["sheepish"],
+		},
+	},
+	pixel: {
+		favorites: ["mischievous", "goofy", "proud", "left wink", "cat smile"],
+		after: {
+			puzzled: ["goofy"],
+			goofy: ["proud", "giggle"],
+			mischievous: ["left wink"],
+			"left wink": ["cat smile"],
+		},
+	},
+};
+
 function useFaceAnimation(
 	enabled: boolean,
 	character: BuiltinCompanionCharacter,
@@ -366,14 +407,21 @@ function useFaceAnimation(
 							(!listening || beat.attentive) &&
 							(!bridge || (beat.weight ?? 4) === 4),
 					);
+				const habits = faceHabits[character];
+				const followups = habits.after[faceBeats[cursor.current].name];
+				const phrase = listening
+					? []
+					: choices.filter(({ beat }) => followups?.includes(beat.name));
+				const pool = phrase.length && Math.random() > 0.4 ? phrase : choices;
+				const weight = (beat: FaceBeat) =>
+					(beat.weight ?? 4) * (habits.favorites.includes(beat.name) ? 1.7 : 1);
 				let draw =
-					Math.random() *
-					choices.reduce((sum, { beat }) => sum + (beat.weight ?? 4), 0);
+					Math.random() * pool.reduce((sum, { beat }) => sum + weight(beat), 0);
 				const next =
-					choices.find(({ beat }) => {
-						draw -= beat.weight ?? 4;
+					pool.find(({ beat }) => {
+						draw -= weight(beat);
 						return draw < 0;
-					}) ?? choices[0];
+					}) ?? pool[0];
 				cursor.current = next.i;
 				recent.current = [...recent.current.slice(-3), next.i];
 				setIndex(next.i);
@@ -399,7 +447,7 @@ function useFaceAnimation(
 			document.removeEventListener("visibilitychange", refresh);
 			motion.removeEventListener("change", refresh);
 		};
-	}, [enabled, listening, seed]);
+	}, [enabled, listening, seed, character]);
 	return { beat: faceBeats[index], index, paused };
 }
 
@@ -546,7 +594,8 @@ const eyeRects = {
 };
 
 function Eyes({ mood, pixels, reaction }: ExpressionProps) {
-	const expression = mood === "idle" ? reaction : mood;
+	const expression =
+		mood === "idle" ? (reaction === "peekaboo" ? "complete" : reaction) : mood;
 	if (expression === "starstruck")
 		return (
 			<path
@@ -564,7 +613,7 @@ function Eyes({ mood, pixels, reaction }: ExpressionProps) {
 				<path className={cn("companion-art-cheeks")} d="M17 44h7m52 0h7" />
 			</>
 		);
-	if (expression === "happy") {
+	if (expression === "happy" || expression === "found") {
 		return (
 			<>
 				<FaceEye shape="caret" pixels={pixels} />
@@ -610,13 +659,22 @@ function Eyes({ mood, pixels, reaction }: ExpressionProps) {
 	}
 	if (expression === "struggling") {
 		return (
-			<path
-				d={
-					pixels
-						? "M18 19h6v5h6v6h-6v5h-6m64-16h-6v5h-6v6h6v5h6"
-						: "M19 18l13 10-13 9m62-19L68 28l13 9"
-				}
-			/>
+			<>
+				<path
+					className={cn("companion-art-struggle-effort")}
+					d={
+						pixels
+							? "M18 19h6v5h6v6h-6v5h-6m64-16h-6v5h-6v6h6v5h6"
+							: "M19 18l13 10-13 9m62-19L68 28l13 9"
+					}
+				/>
+				<g className={cn("companion-art-struggle-rest")}>
+					<FaceEye shape="line" pixels={pixels} />
+					<g transform="translate(45 0)">
+						<FaceEye shape="small" pixels={pixels} />
+					</g>
+				</g>
+			</>
 		);
 	}
 	if (
@@ -655,7 +713,9 @@ function Eyes({ mood, pixels, reaction }: ExpressionProps) {
 				? mood
 				: reaction === "waking"
 					? "waking"
-					: reaction === "rest" || reaction === "listening"
+					: reaction === "rest" ||
+							reaction === "listening" ||
+							reaction === "playful"
 						? "idle"
 						: "curious"
 		];
@@ -876,7 +936,9 @@ export function CompanionArt({
 	const sleeping = expressionMood === "idle" && reaction === "dozing";
 	const sprite =
 		expressionMood === "idle" &&
-		["peekaboo", "playful", "dozing", "waking"].includes(reaction);
+		["peekaboo", "peeking", "found", "playful", "dozing", "waking"].includes(
+			reaction,
+		);
 	const face = useFaceAnimation(lively, character, reaction === "listening");
 	const interacting = reaction !== "rest" && reaction !== "dozing" && !vignette;
 	const x = reaction === "listening" ? -0.55 : interacting ? gaze.x : 0;
@@ -990,7 +1052,7 @@ export function CompanionArt({
 				</span>
 				{sprite && (
 					<CompanionSprite
-						key={`${character}-${reaction === "dozing" || reaction === "waking" ? "nap" : reaction}`}
+						key={`${character}-${reaction === "dozing" || reaction === "waking" ? "nap" : reaction === "peeking" || reaction === "found" ? "peekaboo" : reaction}`}
 						character={character}
 						action={reaction as CompanionSpriteAction}
 					/>
