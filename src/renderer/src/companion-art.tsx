@@ -79,7 +79,8 @@ type EyeShape =
 	| "heart"
 	| "star"
 	| "ring"
-	| "squeeze";
+	| "squeeze"
+	| "crossed";
 type MouthShape =
 	| "smile"
 	| "grin"
@@ -91,7 +92,11 @@ type MouthShape =
 	| "flat"
 	| "slight smile"
 	| "slight frown"
-	| "whistle";
+	| "whistle"
+	| "tongue"
+	| "side tongue"
+	| "puff"
+	| "bite";
 interface FaceBeat {
 	name: string;
 	eyes: [EyeShape, EyeShape];
@@ -99,10 +104,11 @@ interface FaceBeat {
 	openness?: [number, number];
 	brows?: [number, number];
 	glance?: [number, number];
-	cheeks?: boolean;
+	cheeks?: boolean | "puffed";
 	duration?: number;
 	weight?: number;
 	attentive?: boolean;
+	settle?: boolean;
 }
 
 const faceBeats: FaceBeat[] = [
@@ -344,6 +350,65 @@ const faceBeats: FaceBeat[] = [
 		duration: 2700,
 		weight: 2,
 	},
+	{
+		name: "blep",
+		eyes: ["round", "small"],
+		mouth: "tongue",
+		openness: [0.9, 1],
+		duration: 1200,
+		weight: 0.75,
+		settle: true,
+	},
+	{
+		name: "cross-eyed glance",
+		eyes: ["crossed", "crossed"],
+		mouth: "slight smile",
+		brows: [-1, -1],
+		duration: 1000,
+		weight: 0.5,
+		settle: true,
+	},
+	{
+		name: "cheeky wink",
+		eyes: ["line", "round"],
+		mouth: "side tongue",
+		brows: [1, -2],
+		cheeks: true,
+		duration: 1400,
+		weight: 0.75,
+		settle: true,
+	},
+	{
+		name: "puffed cheeks",
+		eyes: ["round", "round"],
+		mouth: "puff",
+		openness: [0.75, 0.75],
+		cheeks: "puffed",
+		duration: 1500,
+		weight: 1,
+		settle: true,
+	},
+	{
+		name: "one brow up",
+		eyes: ["round", "small"],
+		mouth: "slight smile",
+		openness: [0.8, 1.05],
+		brows: [3, -5],
+		glance: [-1, 0],
+		duration: 1600,
+		weight: 1.5,
+		settle: true,
+	},
+	{
+		name: "shy nibble",
+		eyes: ["small", "closed"],
+		mouth: "bite",
+		glance: [-2, 1],
+		cheeks: true,
+		duration: 1500,
+		weight: 1,
+		settle: true,
+	},
 ];
 
 const faceHabits: Record<
@@ -351,12 +416,20 @@ const faceHabits: Record<
 	{ favorites: string[]; after: Record<string, string[]> }
 > = {
 	sprout: {
-		favorites: ["curious", "beaming", "content", "dreamy", "whistling"],
+		favorites: [
+			"curious",
+			"beaming",
+			"content",
+			"dreamy",
+			"whistling",
+			"one brow up",
+		],
 		after: {
 			curious: ["beaming", "amazed"],
 			beaming: ["content", "soft smile"],
 			amazed: ["caret joy"],
 			whistling: ["content", "dreamy"],
+			"one brow up": ["curious", "content"],
 		},
 	},
 	hoodie: {
@@ -366,30 +439,41 @@ const faceHabits: Record<
 			"right wink",
 			"sheepish",
 			"little smile",
+			"shy nibble",
 		],
 		after: {
 			"right wink": ["bashful"],
 			bashful: ["soft smile", "smitten"],
 			smitten: ["little smile"],
 			"little pout": ["sheepish"],
+			"shy nibble": ["soft smile", "little smile"],
 		},
 	},
 	inky: {
-		favorites: ["curious", "bashful", "smitten", "giggle", "whistling"],
+		favorites: ["curious", "bashful", "smitten", "giggle", "whistling", "blep"],
 		after: {
 			curious: ["bashful", "amazed"],
 			bashful: ["little smile", "smitten"],
 			smitten: ["giggle"],
 			whistling: ["content", "little smile"],
+			blep: ["content", "soft smile"],
 		},
 	},
 	pixel: {
-		favorites: ["mischievous", "goofy", "proud", "left wink", "cat smile"],
+		favorites: [
+			"mischievous",
+			"goofy",
+			"proud",
+			"left wink",
+			"cat smile",
+			"cheeky wink",
+		],
 		after: {
 			puzzled: ["goofy"],
 			goofy: ["proud", "giggle"],
 			mischievous: ["left wink"],
 			"left wink": ["cat smile"],
+			"cheeky wink": ["proud", "cat smile"],
 		},
 	},
 };
@@ -422,17 +506,19 @@ function useFaceAnimation(
 		const schedule = () => {
 			timer = window.setTimeout(
 				() => {
-					const bridge = (faceBeats[cursor.current].weight ?? 4) < 4;
+					const previous = faceBeats[cursor.current];
+					const bridge = (previous.weight ?? 4) < 4;
 					const choices = faceBeats
 						.map((beat, i) => ({ beat, i }))
 						.filter(
 							({ beat, i }) =>
 								!recent.current.includes(i) &&
 								(!listening || beat.attentive) &&
+								(!previous.settle || beat.attentive) &&
 								(!bridge || (beat.weight ?? 4) === 4),
 						);
 					const habits = faceHabits[character];
-					const followups = habits.after[faceBeats[cursor.current].name];
+					const followups = habits.after[previous.name];
 					const phrase = listening
 						? []
 						: choices.filter(({ beat }) => followups?.includes(beat.name));
@@ -484,6 +570,20 @@ function FaceEye({
 	pixels,
 	mirrored = false,
 }: { shape: EyeShape; pixels: boolean; mirrored?: boolean }) {
+	if (shape === "crossed")
+		return (
+			<>
+				<rect x="18" y="15" width="19" height="27" rx={pixels ? 0 : 9.5} />
+				<rect
+					className={cn("companion-art-eye-fill")}
+					x={mirrored ? 21 : 29}
+					y="25"
+					width="5"
+					height="10"
+					rx={pixels ? 0 : 2.5}
+				/>
+			</>
+		);
 	const paths: Partial<Record<EyeShape, [string, string]>> = {
 		line: ["M17 29h21", "M17 29h21"],
 		caret: ["M16 32l11-16 11 16", "M16 32v-6h5v-5h4v-5h5v5h4v5h5v6"],
@@ -543,6 +643,10 @@ function LivelyFace({
 		"slight smile": ["M41 53q9 5 18 0", "M41 53v2h18v-2"],
 		"slight frown": ["M42 56q8-5 16 0", "M42 56v-2h16v2"],
 		whistle: ["M51 51a4 4 0 1 0 0 8a4 4 0 1 0 0-8", "M48 51h7v8h-7Z"],
+		tongue: ["M39 51q11 5 22 0", "M39 51v2h22v-2"],
+		"side tongue": ["M37 52q13 12 27-3", "M37 52v5h13v-3h9v-5h5"],
+		puff: ["M45 53q5-5 10 0q-5 5-10 0Z", "M46 51h8v4h-8Z"],
+		bite: ["M38 53q9 10 21 0m-10 3v-5h7v5Z", "M38 53v5h11v-7h7v7h3v-5"],
 		smile: ["M36 50q14 18 28 0", "M36 50v6h6v4h16v-4h6v-6"],
 		grin: ["M35 48h30q-2 17-15 17T35 48Z", "M35 49h30v8h-5v6H40v-6h-5Z"],
 		cat: ["M35 50q7 14 15 3q8 11 15-3", "M35 50v6h10v-4h10v4h10v-6"],
@@ -587,16 +691,38 @@ function LivelyFace({
 				</g>
 			</g>
 			{beat.mouth !== "none" && (
-				<path
-					className={cn(
-						"companion-art-live-mouth",
-						beat.mouth === "grin" && "companion-art-eye-fill",
+				<g className={cn("companion-art-live-mouth")}>
+					<path
+						className={cn(beat.mouth === "grin" && "companion-art-eye-fill")}
+						d={mouths[beat.mouth][pixels ? 1 : 0]}
+					/>
+					{(beat.mouth === "tongue" || beat.mouth === "side tongue") && (
+						<path
+							className={cn("companion-art-eye-fill")}
+							d={
+								beat.mouth === "tongue"
+									? pixels
+										? "M46 52h8v10h-3v3h-5Z"
+										: "M46 52h8v9a4 4 0 0 1-8 0Z"
+									: pixels
+										? "M56 52h8v9h-3v3h-5Z"
+										: "M56 53l7-2 2 7q1 7-5 6Z"
+							}
+						/>
 					)}
-					d={mouths[beat.mouth][pixels ? 1 : 0]}
-				/>
+				</g>
 			)}
 			{beat.cheeks && (
-				<path className={cn("companion-art-cheeks")} d="M12 43h7m62 0h7" />
+				<path
+					className={cn("companion-art-cheeks")}
+					d={
+						beat.cheeks === "puffed"
+							? pixels
+								? "M13 40H8v10h5m74-10h5v10h-5"
+								: "M13 40q-7 5 0 10m74-10q7 5 0 10"
+							: "M12 43h7m62 0h7"
+					}
+				/>
 			)}
 		</g>
 	);

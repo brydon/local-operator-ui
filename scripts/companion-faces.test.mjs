@@ -128,6 +128,14 @@ async function fixture(callback, { hidden = false, reduced = false } = {}) {
 	}
 }
 
+const silly = new Set([
+	"blep",
+	"cross-eyed glance",
+	"cheeky wink",
+	"puffed cheeks",
+	"one brow up",
+	"shy nibble",
+]);
 const uncommon = new Set([
 	"adoring",
 	"starry",
@@ -141,6 +149,7 @@ const uncommon = new Set([
 	"wistful",
 	"hmm",
 	"whistling",
+	...silly,
 ]);
 const subdued = new Set([
 	"skeptical",
@@ -171,27 +180,62 @@ test("a varied, mostly cheerful cycle bridges brief special faces with everyday 
 			const seen = new Set([emotion()]);
 			const recent = [emotion()];
 			let subduedCount = 0;
+			let sillyCount = 0;
 			for (let i = 0; i < 1600; i++) {
 				const previous = emotion();
 				if (uncommon.has(previous))
 					assert.ok(timers.values().next().value.delay <= 2800);
+				if (silly.has(previous))
+					assert.ok(timers.values().next().value.delay <= 1600);
 				const next = await step();
 				assert.ok(!recent.includes(next), "avoid the last four expressions");
 				if (uncommon.has(previous)) assert.ok(!uncommon.has(next));
+				if (silly.has(previous))
+					assert.ok(
+						attentive.has(next),
+						"silly moments settle into a calm face",
+					);
 				if (subdued.has(next)) subduedCount++;
+				if (silly.has(next)) sillyCount++;
 				recent.push(next);
 				if (recent.length > 4) recent.shift();
 				seen.add(next);
 			}
 			assert.equal(
 				seen.size,
-				31,
+				37,
 				`${character} retains the full expression repertoire`,
 			);
 			assert.ok(
 				seen.has("adoring") && seen.has("caret joy") && seen.has("starry"),
 			);
 			assert.ok(subduedCount < 192, "non-cheerful beats stay a small minority");
+			assert.ok(sillyCount < 160, "silly faces are occasional surprises");
+		});
+});
+
+test("each pet's silly face pauses for reduced motion and yields to tasks or listening", async () => {
+	for (const character of ["sprout", "hoodie", "pixel", "inky"])
+		await fixture(async ({ render, emotion, step, reduceMotion }) => {
+			await render({ character });
+			for (let i = 0; !silly.has(emotion()) && i < 100; i++) await step();
+			const before = emotion();
+			assert.ok(silly.has(before));
+			await reduceMotion(true);
+			assert.equal(emotion(), before);
+			assert.equal(timers.size, 0);
+			for (const mood of ["working", "attention", "error"]) {
+				await render({ mood });
+				assert.equal(emotion(), undefined);
+				assert.equal(timers.size, 0);
+			}
+			await render({ mood: "idle" });
+			assert.equal(emotion(), before);
+			await render({ reaction: "listening" });
+			assert.ok(attentive.has(emotion()));
+			assert.equal(timers.size, 0);
+			await reduceMotion(false);
+			assert.ok(attentive.has(await step()));
 		});
 });
 
