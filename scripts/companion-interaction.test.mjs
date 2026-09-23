@@ -12,6 +12,9 @@ globalThis.window = dom.window;
 globalThis.document = dom.window.document;
 globalThis.HTMLElement = dom.window.HTMLElement;
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+const motion = new dom.window.EventTarget();
+motion.matches = false;
+window.matchMedia = () => motion;
 const timers = new Map();
 let now = 0;
 let timerId = 0;
@@ -70,6 +73,9 @@ after(() => {
 });
 
 async function fixture(callback) {
+	const getHours = Date.prototype.getHours;
+	let hour = 12;
+	Date.prototype.getHours = () => hour;
 	const host = document.createElement("div");
 	document.body.append(host);
 	const root = createRoot(host);
@@ -81,6 +87,9 @@ async function fixture(callback) {
 		return React.createElement("button", {
 			type: "button",
 			...interaction.handlers,
+			onClick: (event) => {
+				if (event.detail === 0) interaction.tap();
+			},
 			onPointerUp: (event) => {
 				released = interaction.handlers.onPointerUp(event);
 			},
@@ -141,6 +150,14 @@ async function fixture(callback) {
 			event,
 			flush,
 			advance,
+			hour: (value) => {
+				hour = value;
+			},
+			reduceMotion: async (matches) =>
+				act(async () => {
+					motion.matches = matches;
+					motion.dispatchEvent(new dom.window.Event("change"));
+				}),
 			released: () => released,
 			mood: async (next) => {
 				mood = next;
@@ -163,6 +180,8 @@ async function fixture(callback) {
 	} finally {
 		await act(async () => root.unmount());
 		assert.equal(button.hasPointerCapture(1), false);
+		Date.prototype.getHours = getHours;
+		motion.matches = false;
 		Reflect.deleteProperty(document, "hidden");
 		host.remove();
 	}
@@ -192,6 +211,8 @@ test("a tap is happy, a six-pixel move stays a tap, and dragging lands without a
 		assert.equal(button.dataset.reaction, "pressed");
 		await event("pointerup");
 		assert.equal(released(), "tap");
+		assert.equal(button.dataset.reaction, "happy");
+		await event("pointermove");
 		assert.equal(button.dataset.reaction, "happy");
 		for (let i = 0; i < 6; i++) {
 			await event("pointerdown");
@@ -262,6 +283,113 @@ test("chat keeps the companion awake; waking yields immediately to a new grab", 
 		assert.equal(button.dataset.reaction, "grabbed");
 		await advance(800);
 		assert.equal(button.dataset.reaction, "dragging");
+	});
+});
+
+test("one time-of-day gesture leaves the original ninety-second sleep deadline intact", async () => {
+	for (const [time, reaction] of [
+		[5, "stretching"],
+		[10, "stretching"],
+		[11, "daydream"],
+		[20, "daydream"],
+		[21, "yawning"],
+		[4, "yawning"],
+	]) {
+		await fixture(async ({ button, advance, hour }) => {
+			hour(time);
+			await advance(34_999);
+			assert.equal(button.dataset.reaction, "rest");
+			await advance(1);
+			assert.equal(button.dataset.reaction, reaction);
+			assert.equal(timers.size, 2);
+			await advance(2600);
+			assert.equal(button.dataset.reaction, "rest");
+			assert.equal(timers.size, 1);
+			await advance(52_399);
+			assert.equal(button.dataset.reaction, "rest");
+			await advance(1);
+			assert.equal(button.dataset.reaction, "dozing");
+			assert.equal(timers.size, 0);
+		});
+	}
+	await fixture(async ({ button, advance }) => {
+		const [id, timer] = timers.entries().next().value;
+		await act(async () => {
+			timers.delete(id);
+			now += 89_000;
+			timer.callback();
+		});
+		assert.equal(button.dataset.reaction, "rest");
+		await advance(1000);
+		assert.equal(button.dataset.reaction, "dozing");
+	});
+});
+
+test("ambient gestures yield to attention, task changes, chat, hiding and reduced motion", async () => {
+	for (const interrupt of [
+		(f) => f.event("pointerover"),
+		(f) => f.event("pointermove"),
+		(f) => f.event("pointerdown"),
+		(f) => act(async () => f.button.focus()),
+		(f) => f.mood("working"),
+		(f) => f.chat(true),
+		(f) => f.visibility(true),
+		(f) => f.reduceMotion(true),
+	]) {
+		await fixture(async (f) => {
+			await f.advance(35_000);
+			assert.equal(f.button.dataset.reaction, "daydream");
+			await interrupt(f);
+			assert.notEqual(f.button.dataset.reaction, "daydream");
+			await f.advance(2600);
+			assert.notEqual(f.button.dataset.reaction, "daydream");
+		});
+	}
+	for (const engage of [
+		(f) => f.event("pointerover"),
+		(f) => act(async () => f.button.focus()),
+		(f) => f.event("pointerdown"),
+		(f) => f.reduceMotion(true),
+	]) {
+		await fixture(async (f) => {
+			await engage(f);
+			await f.advance(35_000);
+			assert.notEqual(f.button.dataset.reaction, "daydream");
+		});
+	}
+	assert.equal(timers.size, 0);
+});
+
+test("a rare reward needs four recent accepted loves and respects its cooldown", async () => {
+	await fixture(async ({ button, event, advance }) => {
+		const love = async () => {
+			for (let i = 0; i < 3; i++) await event("click");
+		};
+		await love();
+		for (let i = 0; i < 3; i++) await love();
+		assert.equal(button.dataset.reaction, "happy");
+		await advance(20_001);
+		for (let i = 0; i < 4; i++) {
+			if (i) await advance(2000);
+			await love();
+			assert.equal(button.dataset.reaction, i === 3 ? "starstruck" : "loved");
+		}
+		assert.equal(timers.size, 2);
+		await advance(1699);
+		assert.equal(button.dataset.reaction, "starstruck");
+		await advance(1);
+		assert.equal(button.dataset.reaction, "rest");
+		for (let i = 0; i < 4; i++) {
+			await advance(2000);
+			await love();
+			assert.equal(button.dataset.reaction, "loved");
+		}
+		await advance(60_000);
+		for (let i = 0; i < 4; i++) {
+			if (i) await advance(2000);
+			await love();
+			assert.equal(button.dataset.reaction, i === 3 ? "starstruck" : "loved");
+		}
 	});
 });
 

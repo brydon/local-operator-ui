@@ -6,6 +6,16 @@ import {
 } from "../../shared/desktop-companion";
 import type { CompanionReaction } from "./companion-art";
 
+type DelightReaction =
+	| "happy"
+	| "loved"
+	| "waking"
+	| "landing"
+	| "stretching"
+	| "yawning"
+	| "daydream"
+	| "starstruck";
+
 export function useCompanionInteraction(
 	mood: CompanionMood = "idle",
 	chatOpen = false,
@@ -17,9 +27,7 @@ export function useCompanionInteraction(
 		"grabbed" | "dragging" | "struggling" | null
 	>(null);
 	const [dozing, setDozing] = useState(false);
-	const [delight, setDelight] = useState<
-		"happy" | "loved" | "waking" | "landing" | null
-	>(null);
+	const [delight, setDelight] = useState<DelightReaction | null>(null);
 	const [gaze, setGaze] = useState({ x: 0, y: 0 });
 	const origin = useRef<{
 		x: number;
@@ -36,7 +44,12 @@ export function useCompanionInteraction(
 	} | null>(null);
 	const lastPetAt = useRef(Number.NEGATIVE_INFINITY);
 	const lastLovedAt = useRef(Number.NEGATIVE_INFINITY);
+	const lastRewardAt = useRef(Number.NEGATIVE_INFINITY);
+	const affection = useRef<number[]>([]);
 	const taps = useRef({ count: 0, started: 0 });
+	const attention = useRef({ hovered: false, focused: false });
+	const ambient = useRef(false);
+	const reducedMotion = useRef(false);
 	const sleeping = useRef(false);
 	const chatVisible = useRef(chatOpen);
 	const timers = useRef({ idle: 0, hold: 0, reaction: 0 });
@@ -53,42 +66,102 @@ export function useCompanionInteraction(
 		frame.current = null;
 	}, []);
 	const play = useCallback(
-		(reaction: "happy" | "loved" | "waking" | "landing", duration: number) => {
+		(reaction: DelightReaction, duration: number) => {
 			clear("reaction");
+			ambient.current =
+				reaction === "stretching" ||
+				reaction === "yawning" ||
+				reaction === "daydream";
 			setDelight(reaction);
 			timers.current.reaction = window.setTimeout(() => {
 				timers.current.reaction = 0;
+				ambient.current = false;
 				setDelight(null);
 			}, duration);
 		},
 		[clear],
 	);
+	const cancelAmbient = useCallback(() => {
+		if (!ambient.current) return;
+		ambient.current = false;
+		clear("reaction");
+		setDelight(null);
+	}, [clear]);
 	const wake = useCallback(
 		(stretch = true) => {
 			clear("idle");
+			cancelAmbient();
 			if (sleeping.current && stretch) play("waking", 800);
 			sleeping.current = false;
 			setDozing(false);
-			if (
+			const canRest = () =>
 				currentMood.current === "idle" &&
 				!chatVisible.current &&
-				!document.hidden
-			)
-				timers.current.idle = window.setTimeout(() => {
-					timers.current.idle = 0;
-					if (!origin.current && !document.hidden) {
-						sleeping.current = true;
-						setDozing(true);
-					}
-				}, 90_000);
+				!document.hidden;
+			if (!canRest()) return;
+			const dozeAt = window.performance.now() + 90_000;
+			const doze = () => {
+				timers.current.idle = 0;
+				if (canRest() && !origin.current) {
+					sleeping.current = true;
+					setDozing(true);
+				}
+			};
+			if (reducedMotion.current) {
+				timers.current.idle = window.setTimeout(doze, 90_000);
+				return;
+			}
+			timers.current.idle = window.setTimeout(() => {
+				timers.current.idle = 0;
+				if (!canRest()) return;
+				if (
+					!origin.current &&
+					!attention.current.hovered &&
+					!attention.current.focused &&
+					!reducedMotion.current &&
+					dozeAt - window.performance.now() >= 2600
+				) {
+					const hour = new Date().getHours();
+					play(
+						hour >= 5 && hour <= 10
+							? "stretching"
+							: hour >= 11 && hour <= 20
+								? "daydream"
+								: "yawning",
+						2600,
+					);
+				}
+				timers.current.idle = window.setTimeout(
+					doze,
+					Math.max(0, dozeAt - window.performance.now()),
+				);
+			}, 35_000);
 		},
-		[clear, play],
+		[cancelAmbient, clear, play],
 	);
 	const love = useCallback(() => {
 		const time = window.performance.now();
-		const ready = time - lastLovedAt.current >= 2000;
-		if (ready) lastLovedAt.current = time;
-		play(ready ? "loved" : "happy", 1200);
+		if (time - lastLovedAt.current < 2000) {
+			play("happy", 1200);
+			return;
+		}
+		lastLovedAt.current = time;
+		if (currentMood.current === "idle" || currentMood.current === "complete") {
+			affection.current = affection.current
+				.filter((at) => time - at <= 20_000)
+				.slice(-3);
+			affection.current.push(time);
+			if (
+				affection.current.length === 4 &&
+				time - lastRewardAt.current >= 60_000
+			) {
+				lastRewardAt.current = time;
+				affection.current = [];
+				play("starstruck", 1700);
+				return;
+			}
+		}
+		play("loved", 1200);
 	}, [play]);
 	const tap = useCallback(() => {
 		wake();
@@ -109,6 +182,9 @@ export function useCompanionInteraction(
 		origin.current = null;
 		rub.current = null;
 		taps.current.count = 0;
+		affection.current = [];
+		attention.current = { hovered: false, focused: false };
+		ambient.current = false;
 		sleeping.current = false;
 		if (gesture?.target.hasPointerCapture(gesture.pointerId))
 			gesture.target.releasePointerCapture(gesture.pointerId);
@@ -182,6 +258,16 @@ export function useCompanionInteraction(
 	}
 
 	useEffect(() => {
+		const preference = window.matchMedia("(prefers-reduced-motion: reduce)");
+		const sync = () => {
+			reducedMotion.current = preference.matches;
+			if (preference.matches) cancelAmbient();
+		};
+		sync();
+		preference.addEventListener("change", sync);
+		return () => preference.removeEventListener("change", sync);
+	}, [cancelAmbient]);
+	useEffect(() => {
 		currentMood.current = mood;
 		chatVisible.current = chatOpen;
 		rub.current = null;
@@ -220,17 +306,22 @@ export function useCompanionInteraction(
 		isEngaged: hovered || focused || pressed || dragging !== null,
 		handlers: {
 			onFocus: () => {
+				attention.current.focused = true;
 				wake();
 				setFocused(true);
 			},
 			onBlur: blur,
 			onPointerEnter: (event: PointerEvent<HTMLButtonElement>) => {
 				wake();
-				if (event.pointerType !== "touch") setHovered(true);
+				if (event.pointerType !== "touch") {
+					attention.current.hovered = true;
+					setHovered(true);
+				}
 				look(event);
 			},
 			onPointerLeave: () => {
 				rub.current = null;
+				attention.current.hovered = false;
 				setHovered(false);
 				cancelFrame();
 				if (!origin.current) setGaze({ x: 0, y: 0 });

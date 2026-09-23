@@ -21,7 +21,11 @@ export type CompanionReaction =
 	| "waking"
 	| "listening"
 	| "landing"
-	| "dozing";
+	| "dozing"
+	| "stretching"
+	| "yawning"
+	| "daydream"
+	| "starstruck";
 
 const artwork: Record<BuiltinCompanionCharacter, string> = {
 	sprout,
@@ -214,6 +218,13 @@ const eyeRects = {
 
 function Eyes({ mood, pixels, reaction }: ExpressionProps) {
 	const expression = mood === "idle" ? reaction : mood;
+	if (expression === "starstruck")
+		return (
+			<path
+				className={cn("companion-art-eye-fill")}
+				d="M27 9l4 9 10 1-7 7 2 11-9-5-9 5 2-11-7-7 10-1Zm46 0 4 9 10 1-7 7 2 11-9-5-9 5 2-11-7-7 10-1Z"
+			/>
+		);
 	if (expression === "loved")
 		return (
 			<>
@@ -397,13 +408,103 @@ function Mouth({ mood, pixels, reaction }: ExpressionProps) {
 				/>
 			);
 		}
-		if (reaction === "curious" || reaction === "happy") {
+		if (
+			reaction === "curious" ||
+			reaction === "happy" ||
+			reaction === "starstruck"
+		) {
 			return (
 				<path d={pixels ? "M34 47v8h7v5h18v-5h7v-8" : "M34 47q16 25 32 0"} />
 			);
 		}
 	}
 	return <path d={pixels ? "M38 49v7h6v4h12v-4h6v-7" : "M38 49q12 18 24 0"} />;
+}
+
+function IdleVignette({
+	character,
+	reaction,
+	beat,
+}: {
+	character: BuiltinCompanionCharacter;
+	reaction: CompanionReaction;
+	beat: (typeof faceBeats)[number];
+}) {
+	const pixels = character === "pixel";
+	const game = reaction === "daydream" && pixels;
+	return (
+		<>
+			<g className={cn("companion-art-vignette-rest")}>
+				<LivelyFace beat={beat} pixels={pixels} reaction="rest" />
+			</g>
+			<g className={cn("companion-art-vignette-scene")}>
+				{game ? (
+					<g className={cn("companion-art-eye-fill")}>
+						<rect
+							className={cn("companion-art-paddle-left")}
+							x="16"
+							y="16"
+							width="5"
+							height="18"
+						/>
+						<rect
+							className={cn("companion-art-paddle-right")}
+							x="79"
+							y="35"
+							width="5"
+							height="18"
+						/>
+						<rect
+							className={cn("companion-art-game-ball")}
+							x="47"
+							y="32"
+							width="6"
+							height="6"
+						/>
+					</g>
+				) : (
+					<>
+						<g className={cn("companion-art-vignette-eyes")}>
+							{reaction === "yawning" ? (
+								<path d={eyePaths.offline[pixels ? 1 : 0]} />
+							) : (
+								[0, 46].map((offset) => (
+									<rect
+										key={offset}
+										className={cn(
+											"companion-art-eye-fill",
+											offset === 0
+												? "companion-art-peek-left"
+												: "companion-art-peek-right",
+										)}
+										x={19 + offset}
+										y="15"
+										width="16"
+										height="27"
+										rx={pixels ? 0 : 8}
+									/>
+								))
+							)}
+						</g>
+						{reaction === "yawning" ? (
+							<rect
+								className={cn("companion-art-yawn-mouth")}
+								x="44"
+								y="43"
+								width="12"
+								height="21"
+								rx={pixels ? 0 : 6}
+							/>
+						) : (
+							<path
+								d={pixels ? "M35 48v6h8v5h14v-5h8v-6" : "M35 48q15 23 30 0"}
+							/>
+						)}
+					</>
+				)}
+			</g>
+		</>
+	);
 }
 
 export function CompanionArt({
@@ -436,8 +537,11 @@ export function CompanionArt({
 	const lively =
 		(expressionMood === "idle" || expressionMood === "complete") &&
 		["rest", "curious", "listening"].includes(reaction);
+	const vignette =
+		expressionMood === "idle" &&
+		["stretching", "yawning", "daydream"].includes(reaction);
 	const face = useFaceAnimation(lively, character);
-	const interacting = reaction !== "rest" && reaction !== "dozing";
+	const interacting = reaction !== "rest" && reaction !== "dozing" && !vignette;
 	const x = reaction === "listening" ? -0.55 : interacting ? gaze.x : 0;
 	const y = reaction === "listening" ? -0.45 : interacting ? gaze.y : 0;
 	const tracking = {
@@ -456,6 +560,7 @@ export function CompanionArt({
 			data-expression={expressionMood}
 			data-reaction={reaction}
 			data-physical={physical || undefined}
+			data-vignette={vignette || undefined}
 			data-celebrating={celebrating || undefined}
 			data-face-beat={lively ? face.index : undefined}
 			data-paused={face.paused || undefined}
@@ -495,7 +600,13 @@ export function CompanionArt({
 					>
 						<g className={cn("companion-art-gaze")}>
 							<g className={cn("companion-art-expression")}>
-								{lively ? (
+								{vignette ? (
+									<IdleVignette
+										character={character}
+										reaction={reaction}
+										beat={face.beat}
+									/>
+								) : lively ? (
 									<LivelyFace
 										beat={face.beat}
 										pixels={pixels}
@@ -532,6 +643,18 @@ export function CompanionArt({
 					</svg>
 				</span>
 			</span>
+			{vignette && reaction === "daydream" && character === "sprout" && (
+				<svg
+					aria-hidden="true"
+					className={cn("companion-art-motes")}
+					viewBox="0 0 100 100"
+					focusable="false"
+				>
+					<circle cx="23" cy="39" r="1.5" />
+					<circle cx="28" cy="34" r="1" />
+					<circle cx="20" cy="30" r="1" />
+				</svg>
+			)}
 			<svg
 				aria-hidden="true"
 				className={cn("companion-art-hearts")}
