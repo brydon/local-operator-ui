@@ -3,6 +3,7 @@ import {
 	constants,
 	closeSync,
 	fstatSync,
+	lstatSync,
 	mkdirSync,
 	openSync,
 	readSync,
@@ -42,6 +43,8 @@ const MAX_EDGE = 2048;
 const MAX_MANIFEST_BYTES = 64 * 1024;
 const MAX_SAVED_BYTES = 19 * 1024 * 1024;
 const MAX_PACKS = 64;
+const INDEX_NAME = ".index.json";
+const MAX_INDEX_BYTES = 32 * 1024;
 const PNG_PREFIX = "data:image/png;base64,";
 const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
 const SAVED_NAME = /^custom-[a-f0-9]{32}\.json$/;
@@ -55,6 +58,98 @@ interface StoredPack {
 	name: string;
 	frames: Partial<Record<CompanionPose, string>>;
 	pixelated: boolean;
+}
+
+interface IndexedPack {
+	id: string;
+	name: string;
+	size: number;
+	mtimeMs: number;
+	ctimeMs: number;
+}
+
+function validName(value: unknown): value is string {
+	return (
+		typeof value === "string" &&
+		value.trim().length > 0 &&
+		value.trim().length <= 64 &&
+		!CONTROL_CHARACTERS.test(value)
+	);
+}
+
+function quoted(value: string): string {
+	return JSON.stringify(
+		value.length > 160 ? `${value.slice(0, 157)}...` : value,
+	);
+}
+
+function packMetadata(
+	directory: string,
+	id: string,
+	name: string,
+): IndexedPack {
+	const stat = lstatSync(join(directory, `${id}.json`));
+	if (!stat.isFile() || stat.size > MAX_SAVED_BYTES)
+		throw new Error("Invalid saved companion file.");
+	return {
+		id,
+		name,
+		size: stat.size,
+		mtimeMs: stat.mtimeMs,
+		ctimeMs: stat.ctimeMs,
+	};
+}
+
+function readIndex(directory: string): Map<string, IndexedPack> {
+	try {
+		const index = object(
+			JSON.parse(
+				readBounded(join(directory, INDEX_NAME), MAX_INDEX_BYTES).toString(
+					"utf8",
+				),
+			),
+		);
+		if (
+			index.version !== 1 ||
+			Object.keys(index).some((key) => !["version", "packs"].includes(key)) ||
+			!Array.isArray(index.packs) ||
+			index.packs.length > MAX_PACKS
+		)
+			throw new Error("Invalid companion index.");
+		const entries = new Map<string, IndexedPack>();
+		for (const value of index.packs) {
+			const entry = object(value);
+			if (
+				typeof entry.id !== "string" ||
+				!SAVED_NAME.test(`${entry.id}.json`) ||
+				entries.has(entry.id) ||
+				!validName(entry.name) ||
+				entry.name !== entry.name.trim() ||
+				Object.keys(entry).some(
+					(key) => !["id", "name", "size", "mtimeMs", "ctimeMs"].includes(key),
+				) ||
+				typeof entry.size !== "number" ||
+				!Number.isSafeInteger(entry.size) ||
+				entry.size <= 0 ||
+				entry.size > MAX_SAVED_BYTES ||
+				typeof entry.mtimeMs !== "number" ||
+				!Number.isFinite(entry.mtimeMs) ||
+				typeof entry.ctimeMs !== "number" ||
+				!Number.isFinite(entry.ctimeMs)
+			)
+				throw new Error("Invalid companion index entry.");
+			entries.set(entry.id, {
+				id: entry.id,
+				name: entry.name,
+				size: entry.size,
+				mtimeMs: entry.mtimeMs,
+				ctimeMs: entry.ctimeMs,
+			});
+		}
+		return entries;
+	} catch {
+		return new Map();
+	}
 }
 
 function object(value: unknown): Record<string, unknown> {
@@ -244,24 +339,20 @@ function validatePng(bytes: Buffer, decode: boolean): void {
 function normalizePack(
 	value: unknown,
 	readFrame: (path: string) => Buffer,
-	decode = true,
+	{ decode = true, sourceFiles = false } = {},
 ): StoredPack {
 	const pack = object(value);
-	if (
-		Object.keys(pack).some(
-			(key) => !["version", "name", "frames", "pixelated"].includes(key),
-		)
-	) {
-		throw new Error("This companion pack contains unsupported fields.");
+	const unsupported = Object.keys(pack).find(
+		(key) => !["version", "name", "frames", "pixelated"].includes(key),
+	);
+	if (unsupported !== undefined) {
+		throw new Error(
+			`Unsupported companion field ${quoted(unsupported)}. Supported fields: version, name, frames, pixelated.`,
+		);
 	}
 	if (pack.version !== 1)
 		throw new Error("This companion pack version is not supported.");
-	if (
-		typeof pack.name !== "string" ||
-		!pack.name.trim() ||
-		pack.name.trim().length > 64 ||
-		CONTROL_CHARACTERS.test(pack.name)
-	) {
+	if (!validName(pack.name)) {
 		throw new Error(
 			"Give the companion a name of 1 to 64 characters without control characters.",
 		);
@@ -270,10 +361,13 @@ function normalizePack(
 		throw new Error("The pixelated setting must be true or false.");
 	}
 	const sources = object(pack.frames);
-	if (
-		Object.keys(sources).some((key) => !POSES.includes(key as CompanionPose))
-	) {
-		throw new Error("This companion pack contains an unknown pose name.");
+	const unknownPose = Object.keys(sources).find(
+		(key) => !POSES.includes(key as CompanionPose),
+	);
+	if (unknownPose !== undefined) {
+		throw new Error(
+			`Unknown companion pose ${quoted(unknownPose)}. Supported poses: ${POSES.join(", ")}.`,
+		);
 	}
 	if (typeof sources.idle !== "string") {
 		throw new Error("A companion pack needs an idle PNG pose.");
@@ -281,11 +375,23 @@ function normalizePack(
 	const frames: StoredPack["frames"] = {};
 	for (const pose of POSES) {
 		if (sources[pose] === undefined) continue;
-		if (typeof sources[pose] !== "string")
-			throw new Error("Each pose must name a PNG file.");
-		const bytes = readFrame(sources[pose]);
-		validatePng(bytes, decode);
-		frames[pose] = PNG_PREFIX + bytes.toString("base64");
+		const source = sources[pose];
+		if (typeof source !== "string")
+			throw new Error(`The ${quoted(pose)} pose must name a PNG file.`);
+		try {
+			const bytes = readFrame(source);
+			validatePng(bytes, decode);
+			frames[pose] = PNG_PREFIX + bytes.toString("base64");
+		} catch (error) {
+			if (!sourceFiles || !(error instanceof Error)) throw error;
+			const message =
+				"code" in error
+					? "Could not read this PNG file. Check that it exists and is readable."
+					: error.message;
+			throw new Error(
+				`The ${quoted(pose)} pose (${quoted(source)}): ${message}`,
+			);
+		}
 	}
 	return {
 		version: 1,
@@ -322,12 +428,12 @@ function readPack(path: string, decode: boolean): StoredPack {
 				throw new Error("Invalid saved PNG pose.");
 			return bytes;
 		},
-		decode,
+		{ decode },
 	);
 }
 
 export class CompanionSkinLibrary {
-	private readonly packs = new Map<string, string>();
+	private readonly packs = new Map<string, IndexedPack>();
 	private cached: { id: string; pack: StoredPack } | null = null;
 
 	constructor(private readonly directory: string) {
@@ -339,14 +445,52 @@ export class CompanionSkinLibrary {
 		} catch {
 			return;
 		}
-		for (const name of names.slice(0, MAX_PACKS)) {
+		const index = readIndex(directory);
+		const entries = names.slice(0, MAX_PACKS);
+		let changed = entries.length !== index.size;
+		for (const filename of entries) {
+			const id = filename.slice(0, -5);
 			try {
-				const pack = readPack(join(directory, name), false);
-				const id = identifier(pack);
-				if (name !== `${id}.json`) continue;
-				this.packs.set(id, pack.name);
+				const saved = index.get(id);
+				const metadata = packMetadata(directory, id, saved?.name ?? "");
+				if (
+					saved &&
+					metadata.size === saved.size &&
+					metadata.mtimeMs === saved.mtimeMs &&
+					metadata.ctimeMs === saved.ctimeMs
+				) {
+					this.packs.set(id, saved);
+					continue;
+				}
+				changed = true;
+				// A legacy or changed file is checked once; normal startup reads only metadata.
+				const pack = readPack(join(directory, filename), false);
+				if (identifier(pack) !== id) continue;
+				this.packs.set(id, { ...metadata, name: pack.name });
 			} catch {
+				changed = true;
 				// A damaged custom pack must not prevent built-in companions from loading.
+			}
+		}
+		if (changed) this.writeIndex();
+	}
+
+	private writeIndex(): void {
+		const temp = join(this.directory, `.${randomUUID()}.tmp`);
+		try {
+			const packs = Array.from(this.packs.values());
+			writeFileSync(temp, JSON.stringify({ version: 1, packs }), {
+				mode: 0o600,
+				flag: "wx",
+			});
+			renameSync(temp, join(this.directory, INDEX_NAME));
+		} catch {
+			// Pack files remain authoritative if this optional startup cache cannot be saved.
+		} finally {
+			try {
+				unlinkSync(temp);
+			} catch {
+				/* Atomic rename already removed it. */
 			}
 		}
 	}
@@ -354,8 +498,8 @@ export class CompanionSkinLibrary {
 	list(): Array<{ id: string; name: string }> {
 		return [
 			...BUILTIN_COMPANIONS.map(({ id, name }) => ({ id, name })),
-			...Array.from(this.packs, ([id, name]) => ({ id, name })).sort((a, b) =>
-				a.name.localeCompare(b.name),
+			...Array.from(this.packs, ([id, { name }]) => ({ id, name })).sort(
+				(a, b) => a.name.localeCompare(b.name),
 			),
 		];
 	}
@@ -370,9 +514,14 @@ export class CompanionSkinLibrary {
 			if (identifier(pack) !== id)
 				throw new Error("Companion artwork changed.");
 			this.cached = { id, pack };
+			if (this.packs.get(id)?.name !== pack.name) {
+				this.packs.set(id, packMetadata(this.directory, id, pack.name));
+				this.writeIndex();
+			}
 			return appearance(id, pack);
 		} catch {
 			this.packs.delete(id);
+			this.writeIndex();
 			return null;
 		}
 	}
@@ -392,6 +541,7 @@ export class CompanionSkinLibrary {
 		}
 		this.packs.delete(id);
 		if (this.cached?.id === id) this.cached = null;
+		this.writeIndex();
 		return true;
 	}
 
@@ -421,25 +571,29 @@ export class CompanionSkinLibrary {
 				: JSON.parse(
 						readBounded(manifest, MAX_MANIFEST_BYTES).toString("utf8"),
 					);
-			pack = normalizePack(input, (source) => {
-				if (singleImage) return readBounded(manifest, MAX_IMAGE_BYTES);
-				if (
-					!source ||
-					isAbsolute(source) ||
-					source.includes(":") ||
-					source.includes("\\") ||
-					source.split("/").includes("..") ||
-					!PNG_EXTENSION.test(source)
-				) {
-					throw new Error(
-						"Pose paths must be relative PNG filenames inside the pack folder.",
-					);
-				}
-				const path = realpathSync(resolve(root, source));
-				if (!inside(root, path))
-					throw new Error("A pose points outside the pack folder.");
-				return readBounded(path, MAX_IMAGE_BYTES);
-			});
+			pack = normalizePack(
+				input,
+				(source) => {
+					if (singleImage) return readBounded(manifest, MAX_IMAGE_BYTES);
+					if (
+						!source ||
+						isAbsolute(source) ||
+						source.includes(":") ||
+						source.includes("\\") ||
+						source.split("/").includes("..") ||
+						!PNG_EXTENSION.test(source)
+					) {
+						throw new Error(
+							"Pose paths must be relative PNG filenames inside the pack folder.",
+						);
+					}
+					const path = realpathSync(resolve(root, source));
+					if (!inside(root, path))
+						throw new Error("A pose points outside the pack folder.");
+					return readBounded(path, MAX_IMAGE_BYTES);
+				},
+				{ sourceFiles: !singleImage },
+			);
 		} catch (error) {
 			if (error instanceof SyntaxError)
 				throw new Error("The companion manifest is not valid JSON.");
@@ -479,8 +633,9 @@ export class CompanionSkinLibrary {
 				/* Atomic rename already removed the temporary file. */
 			}
 		}
-		this.packs.set(id, pack.name);
+		this.packs.set(id, packMetadata(this.directory, id, pack.name));
 		this.cached = { id, pack };
+		this.writeIndex();
 		return appearance(id, pack);
 	}
 }

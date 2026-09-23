@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import {
+import fs, {
 	mkdirSync,
 	mkdtempSync,
 	readFileSync,
@@ -44,6 +44,16 @@ const REGULAR_FILE_ERROR = /not a regular file/;
 const REMOVE_ERROR = /Could not remove/;
 const REPLACE_ERROR = /custom companion to replace/;
 const FULL_ERROR = /library is full/;
+
+const MISSING_POSE_ERROR = /"working" pose \("workking\.png"\).*Could not read/;
+const BAD_POSE_ERROR = /"sleeping" pose \("broken\.png"\).*valid PNG/;
+const ESCAPING_POSE_ERROR =
+	/"complete" pose \("\.\.\/outside\.png"\).*relative PNG/;
+const UNKNOWN_POSE_ERROR =
+	/Unknown companion pose "happy"\. Supported poses: idle, working, attention, complete, error, offline, sleeping/;
+const UNKNOWN_FIELD_ERROR =
+	/Unsupported companion field "author"\. Supported fields: version, name, frames, pixelated/;
+const MISTYPED_POSE_ERROR = /"working" pose must name a PNG file/;
 
 function chunk(type, payload) {
 	const buffer = Buffer.alloc(payload.length + 12);
@@ -146,7 +156,10 @@ test("import copies poses, preserves optional poses and survives removal of sour
 		result,
 	);
 
-	assert.deepEqual(readdirSync(f.libraryPath), [`${result.id}.json`]);
+	assert.deepEqual(readdirSync(f.libraryPath), [
+		".index.json",
+		`${result.id}.json`,
+	]);
 	if (process.platform !== "win32")
 		assert.equal(
 			statSync(join(f.libraryPath, `${result.id}.json`)).mode & 0o777,
@@ -229,6 +242,43 @@ test("schema requires an idle pose and rejects unsupported or mistyped fields", 
 	writeFileSync(f.manifest, "{ broken");
 	assert.throws(() => f.library.import(f.manifest), JSON_ERROR);
 	assert.equal(f.library.list().length, 4);
+});
+
+test("manifest errors identify the pose, relative file and unsupported key without replacing healthy artwork", (t) => {
+	const f = fixture(t);
+	const original = f.library.import(f.manifest);
+	writeFileSync(join(f.source, "broken.png"), Buffer.from("broken"));
+	for (const [changes, message] of [
+		[
+			{ frames: { idle: "idle.png", working: "workking.png" } },
+			MISSING_POSE_ERROR,
+		],
+		[{ frames: { idle: "idle.png", sleeping: "broken.png" } }, BAD_POSE_ERROR],
+		[
+			{ frames: { idle: "idle.png", complete: "../outside.png" } },
+			ESCAPING_POSE_ERROR,
+		],
+		[{ frames: { idle: "idle.png", happy: "idle.png" } }, UNKNOWN_POSE_ERROR],
+		[{ author: "Artist" }, UNKNOWN_FIELD_ERROR],
+		[{ frames: { idle: "idle.png", working: 1 } }, MISTYPED_POSE_ERROR],
+	]) {
+		assert.throws(
+			() => f.library.import(f.write(changes), original.id),
+			message,
+		);
+		assert.deepEqual(f.library.get(original.id), original);
+		assert.deepEqual(
+			new CompanionSkinLibrary(f.libraryPath).get(original.id),
+			original,
+		);
+	}
+	assert.throws(
+		() => f.library.import(join(f.source, "broken.png")),
+		(error) => {
+			assert.equal(error.message, "Each pose must be a valid PNG image.");
+			return true;
+		},
+	);
 });
 
 test("poses cannot escape the selected folder or fetch a URL", (t) => {
@@ -466,7 +516,10 @@ test("replacement updates artwork without duplicating the character and removal 
 	assert.equal(replaced.frames.idle, dataUrl(edited));
 	assert.equal(f.library.get(original.id), null);
 	assert.equal(f.library.list().length, 5);
-	assert.deepEqual(readdirSync(f.libraryPath), [`${replaced.id}.json`]);
+	assert.deepEqual(readdirSync(f.libraryPath), [
+		".index.json",
+		`${replaced.id}.json`,
+	]);
 	const loaded = new CompanionSkinLibrary(f.libraryPath);
 	assert.deepEqual(loaded.get(replaced.id), replaced);
 	assert.equal(loaded.import(f.manifest, replaced.id).id, replaced.id);
@@ -519,11 +572,174 @@ test("failed replacement or removal preserves the selected character", (t) => {
 	assert.throws(() => f.library.remove(original.id), REMOVE_ERROR);
 	assert.throws(() => f.library.import(f.manifest, original.id), SAVE_ERROR);
 	assert.deepEqual(f.library.get(original.id), original);
-	assert.deepEqual(readdirSync(f.libraryPath), [`${original.id}.json`]);
+	assert.deepEqual(readdirSync(f.libraryPath), [
+		".index.json",
+		`${original.id}.json`,
+	]);
 	rmSync(saved, { recursive: true });
 	renameSync(backup, saved);
 	assert.deepEqual(
 		new CompanionSkinLibrary(f.libraryPath).get(original.id),
 		original,
 	);
+});
+
+test("indexed startup reads no artwork; selection still validates and caches the chosen file", (t) => {
+	const f = fixture(t);
+	const first = f.library.import(f.manifest);
+	const second = f.library.import(f.write({ name: "Moss" }));
+	const opened = t.mock.method(fs, "openSync");
+	syncBuiltinESMExports();
+	t.after(() => {
+		opened.mock.restore();
+		syncBuiltinESMExports();
+	});
+	const loaded = new CompanionSkinLibrary(f.libraryPath);
+	assert.equal(loaded.list().length, 6);
+	assert.deepEqual(
+		opened.mock.calls.map(({ arguments: [path] }) => path),
+		[join(f.libraryPath, ".index.json")],
+	);
+	assert.deepEqual(loaded.get(first.id), first);
+	assert.deepEqual(loaded.get(first.id), first);
+	assert.deepEqual(loaded.get(second.id), second);
+	assert.deepEqual(
+		opened.mock.calls.map(({ arguments: [path] }) => path),
+		[
+			join(f.libraryPath, ".index.json"),
+			join(f.libraryPath, `${first.id}.json`),
+			join(f.libraryPath, `${second.id}.json`),
+		],
+	);
+	const replaced = loaded.import(f.write({ name: "New fern" }), first.id);
+	opened.mock.resetCalls();
+	const afterReplacement = new CompanionSkinLibrary(f.libraryPath);
+	assert.ok(afterReplacement.list().some(({ id }) => id === replaced.id));
+	assert.ok(!afterReplacement.list().some(({ id }) => id === first.id));
+	assert.deepEqual(
+		opened.mock.calls.map(({ arguments: [path] }) => path),
+		[join(f.libraryPath, ".index.json")],
+	);
+	afterReplacement.remove(replaced.id);
+	opened.mock.resetCalls();
+	assert.equal(new CompanionSkinLibrary(f.libraryPath).list().length, 5);
+	assert.deepEqual(
+		opened.mock.calls.map(({ arguments: [path] }) => path),
+		[join(f.libraryPath, ".index.json")],
+	);
+});
+
+test("legacy, invalid and unsafe indexes rebuild from individually validated files", (t) => {
+	const f = fixture(t);
+	const original = f.library.import(f.manifest);
+	const path = join(f.libraryPath, ".index.json");
+	const index = JSON.parse(readFileSync(path, "utf8"));
+	const entry = index.packs[0];
+	for (const invalid of [
+		"not JSON",
+		" ".repeat(32 * 1024 + 1),
+		JSON.stringify({ ...index, version: 2 }),
+		JSON.stringify({ ...index, packs: {} }),
+		JSON.stringify({ ...index, packs: [entry, entry] }),
+		...[
+			{ id: "../../outside" },
+			{ name: "bad\nname" },
+			{ name: "a".repeat(65) },
+			{ size: -1 },
+			{ mtimeMs: "now" },
+			{ ctimeMs: null },
+			{ path: "outside.json" },
+		].map((changes) =>
+			JSON.stringify({ ...index, packs: [{ ...entry, ...changes }] }),
+		),
+	]) {
+		writeFileSync(path, invalid);
+		const loaded = new CompanionSkinLibrary(f.libraryPath);
+		assert.equal(loaded.list().length, 5);
+		assert.deepEqual(loaded.get(original.id), original);
+		assert.deepEqual(JSON.parse(readFileSync(path, "utf8")), index);
+	}
+	rmSync(path);
+	assert.deepEqual(
+		new CompanionSkinLibrary(f.libraryPath).get(original.id),
+		original,
+	);
+	assert.deepEqual(JSON.parse(readFileSync(path, "utf8")), index);
+	const outside = join(f.root, "outside-index.json");
+	writeFileSync(
+		outside,
+		JSON.stringify({ ...index, packs: [{ ...entry, name: "Forged" }] }),
+	);
+	rmSync(path);
+	symlinkSync(outside, path);
+	assert.equal(
+		new CompanionSkinLibrary(f.libraryPath)
+			.list()
+			.find(({ id }) => id === original.id).name,
+		original.name,
+	);
+	assert.equal(
+		JSON.parse(readFileSync(outside, "utf8")).packs[0].name,
+		"Forged",
+	);
+});
+
+test("external damage is checked despite an index and names never override selected artwork", (t) => {
+	const f = fixture(t);
+	const first = f.library.import(f.manifest);
+	const second = f.library.import(f.write({ name: "Moss" }));
+	const path = join(f.libraryPath, ".index.json");
+	const index = JSON.parse(readFileSync(path, "utf8"));
+	index.packs.find(({ id }) => id === first.id).name = "Edited label";
+	writeFileSync(path, JSON.stringify(index));
+	const loaded = new CompanionSkinLibrary(f.libraryPath);
+	assert.deepEqual(loaded.get(first.id), first);
+	assert.equal(
+		loaded.list().find(({ id }) => id === first.id).name,
+		first.name,
+	);
+	writeFileSync(join(f.libraryPath, `${second.id}.json`), "damaged externally");
+	// Saving another pet must not bless the changed file with a fresh timestamp.
+	loaded.import(f.write({ name: "New pet" }));
+	const restarted = new CompanionSkinLibrary(f.libraryPath);
+	assert.equal(restarted.get(second.id), null);
+	assert.ok(!restarted.list().some(({ id }) => id === second.id));
+	assert.deepEqual(restarted.get(first.id), first);
+	const corrupt = {
+		version: 1,
+		name: "Damaged pixels",
+		frames: { idle: dataUrl(png({ pixels: Buffer.alloc(17) })) },
+		pixelated: false,
+	};
+	const id = savedId(corrupt);
+	const stored = join(f.libraryPath, `${id}.json`);
+	writeFileSync(stored, JSON.stringify(corrupt));
+	const stat = statSync(stored);
+	const forged = JSON.parse(readFileSync(path, "utf8"));
+	forged.packs.push({
+		id,
+		name: corrupt.name,
+		size: stat.size,
+		mtimeMs: stat.mtimeMs,
+		ctimeMs: stat.ctimeMs,
+	});
+	writeFileSync(path, JSON.stringify(forged));
+	assert.equal(new CompanionSkinLibrary(f.libraryPath).get(id), null);
+});
+
+test("index write failures preserve successful imports, replacements and removals", (t) => {
+	const f = fixture(t);
+	const first = f.library.import(f.manifest);
+	const path = join(f.libraryPath, ".index.json");
+	rmSync(path);
+	mkdirSync(path);
+	const replacement = f.library.import(f.write({ name: "Updated" }), first.id);
+	assert.equal(new CompanionSkinLibrary(f.libraryPath).get(first.id), null);
+	assert.deepEqual(
+		new CompanionSkinLibrary(f.libraryPath).get(replacement.id),
+		replacement,
+	);
+	assert.equal(f.library.remove(replacement.id), true);
+	assert.equal(new CompanionSkinLibrary(f.libraryPath).list().length, 4);
+	assert.deepEqual(readdirSync(f.libraryPath), [".index.json"]);
 });

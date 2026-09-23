@@ -11,7 +11,8 @@ Brush back and forth over their head or tap a few times for a little heart react
 Pick them up to see them dangle and wriggle; releasing gives them a short fall and
 a soft landing. All companions sleep after 90 quiet seconds, including after completed
 tasks. Click or move them to wake them; passing the pointer over them lets them sleep.
-They stay awake while chat is open. During peekaboo, approach to get a little peek,
+They stay awake while you use chat and can sleep beside an unattended reply.
+During peekaboo, approach to get a little peek,
 then click to find them. Quiet moments bring little dances and a full curl-up at bedtime.
 Morning brings a stretch, daytime brings a character-specific diversion, and late night
 brings a yawn. A little extra affection can reveal a surprise. These use your local clock
@@ -27,7 +28,10 @@ Reduced motion lets you bounce at your own pace. Long naps sometimes bring tiny 
 
 Right-click the pet and choose **Character > Add character…**, or use
 **View > Companion character > Add character…**. Select a transparent PNG, or a JSON
-pack for different task states:
+pack for different task states. Use a consistent, tightly framed transparent canvas
+for every pose: the pet appears in a 110-pixel square, so large empty margins make it look small.
+
+A pack uses this JSON format:
 
 ```json
 {
@@ -54,8 +58,13 @@ pack folder and cannot leave it. Names may contain 1–64 characters. Up to 64 c
 characters can be imported. The app copies the files. Select your custom character,
 then choose **Replace artwork…** in the character menu to import an edited pack;
 **Remove character** removes the app's copy without changing your source files.
-Custom images react to pressing and dragging, but only built-in
+Custom images react to pressing, dragging, and affection, but only built-in
 characters have separate animated eyes.
+
+To share a character, send its source JSON and referenced PNGs together, keeping
+the same relative folders and filenames. A single-image character only needs its PNG.
+Include any artist credit or license in a separate text file; the pack JSON accepts
+only the fields shown above.
 
 The bundled Sprout, Hoodie, and Pixel artwork, including their peekaboo, play, and nap sheets and Hoodie's pickup sheet, was generated with Codex image
 generation on 2026-09-22. Their colors and ambient motion are part of the artwork;
