@@ -3,6 +3,8 @@ import { type CSSProperties, useEffect, useRef, useState } from "react";
 import type { CompanionMood } from "../../shared/desktop-companion";
 import hoodieMotion from "./assets/companions/hoodie-motion.png";
 import hoodie from "./assets/companions/hoodie.png";
+import inkyMotion from "./assets/companions/inky-motion.png";
+import inky from "./assets/companions/inky.png";
 import pixel from "./assets/companions/pixel.png";
 import sprout from "./assets/companions/sprout.png";
 import {
@@ -11,7 +13,7 @@ import {
 } from "./companion-sprites";
 import "./companion-art.css";
 
-export type BuiltinCompanionCharacter = "sprout" | "hoodie" | "pixel";
+export type BuiltinCompanionCharacter = "sprout" | "hoodie" | "pixel" | "inky";
 export type CompanionReaction =
 	| "rest"
 	| "curious"
@@ -39,6 +41,7 @@ const artwork: Record<BuiltinCompanionCharacter, string> = {
 	sprout,
 	hoodie,
 	pixel,
+	inky,
 };
 
 const physicalReactions = new Set<CompanionReaction>([
@@ -367,6 +370,15 @@ const faceHabits: Record<
 			"little pout": ["sheepish"],
 		},
 	},
+	inky: {
+		favorites: ["curious", "bashful", "smitten", "giggle", "whistling"],
+		after: {
+			curious: ["bashful", "amazed"],
+			bashful: ["little smile", "smitten"],
+			smitten: ["giggle"],
+			whistling: ["content", "little smile"],
+		},
+	},
 	pixel: {
 		favorites: ["mischievous", "goofy", "proud", "left wink", "cat smile"],
 		after: {
@@ -383,7 +395,14 @@ function useFaceAnimation(
 	character: BuiltinCompanionCharacter,
 	listening: boolean,
 ) {
-	const seed = character === "sprout" ? 0 : character === "hoodie" ? 7 : 11;
+	const seed =
+		character === "sprout"
+			? 0
+			: character === "hoodie"
+				? 7
+				: character === "inky"
+					? 5
+					: 11;
 	const [index, setIndex] = useState(seed);
 	const [paused, setPaused] = useState(false);
 	const cursor = useRef(seed);
@@ -954,7 +973,11 @@ export function CompanionArt({
 		"--companion-art-tilt": `${x * 2 + 1.5}deg`,
 		"--companion-art-lean": `${x * 6}deg`,
 		"--companion-art-sheet":
-			character === "hoodie" ? `url("${hoodieMotion}")` : undefined,
+			character === "hoodie"
+				? `url("${hoodieMotion}")`
+				: character === "inky"
+					? `url("${inkyMotion}")`
+					: undefined,
 	} as CSSProperties;
 	return (
 		<span
@@ -987,7 +1010,7 @@ export function CompanionArt({
 							draggable={false}
 						/>
 					)}
-					{character === "hoodie" ? (
+					{character === "hoodie" || character === "inky" ? (
 						<span className={cn("companion-art-sprite")} />
 					) : (
 						["left", "right"].map((side) => (

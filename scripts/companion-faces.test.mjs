@@ -165,7 +165,7 @@ const attentive = new Set([
 ]);
 
 test("a varied, mostly cheerful cycle bridges brief special faces with everyday ones", async () => {
-	for (const character of ["sprout", "hoodie", "pixel"])
+	for (const character of ["sprout", "hoodie", "pixel", "inky"])
 		await fixture(async ({ render, emotion, step }) => {
 			await render({ character });
 			const seen = new Set([emotion()]);

@@ -165,6 +165,11 @@ export function CompanionDream({
 			<g transform="translate(17 11) scale(.65)">
 				{character === "sprout" ? (
 					<Seed />
+				) : character === "inky" ? (
+					<path
+						className={cn("companion-play-dream-mark")}
+						d="M-8 0q8-9 14 0q-6 9-14 0Zm0 0-4-4v8ZM2-1h.1"
+					/>
 				) : character === "hoodie" ? (
 					<path
 						className={cn("companion-play-dream-mark")}

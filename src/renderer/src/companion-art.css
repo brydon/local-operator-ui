@@ -39,6 +39,15 @@
 	--companion-art-motion: steps(5, end);
 }
 
+.companion-art-inky {
+	--companion-art-breath: 5.2s;
+	--companion-art-blink: 6.8s;
+	--companion-art-affection: 1200ms;
+	--companion-art-wriggle: 2.2s;
+	--companion-art-sleep-pose: translateY(4px) scale(1.07, 0.85);
+	--companion-art-sleep-breath: 8s;
+}
+
 .companion-art-pose,
 .companion-art-visual {
 	display: block;
@@ -396,6 +405,148 @@
 	top: 26%;
 	width: 32%;
 	height: 18%;
+}
+
+.companion-art-inky .companion-art-face {
+	left: 29%;
+	top: 38%;
+	width: 40%;
+	height: 22%;
+}
+
+.companion-art-inky[data-physical] .companion-art-body {
+	visibility: hidden;
+}
+
+.companion-art-inky[data-physical] .companion-art-sprite {
+	display: block;
+	background-image: var(--companion-art-sheet);
+	background-size: 400% 200%;
+	background-position: 66.666667% 0;
+	transform-origin: 50% 95%;
+	transform: translateY(5%) scale(1.2);
+}
+
+.companion-art-inky[data-physical] .companion-art-face {
+	left: 31%;
+	top: 35%;
+	width: 39%;
+	height: 20%;
+}
+
+.companion-art-inky[data-reaction="struggling"] .companion-art-sprite {
+	animation: companion-art-inky-wriggle var(--companion-art-wriggle)
+		steps(1, end) infinite;
+}
+
+.companion-art-inky[data-reaction="struggling"] .companion-art-face {
+	animation: companion-art-inky-look var(--companion-art-wriggle) steps(1, end)
+		infinite;
+}
+
+.companion-art-inky[data-reaction="falling"] .companion-art-sprite {
+	background-position: 0 100%;
+}
+
+.companion-art-inky[data-reaction="falling"] .companion-art-face {
+	top: 39%;
+}
+
+.companion-art-inky[data-reaction="landing"] .companion-art-sprite {
+	background-position: 33.333333% 100%;
+	animation: companion-art-inky-land 520ms steps(1, end) forwards;
+}
+
+.companion-art-inky[data-reaction="landing"] .companion-art-face {
+	top: 47%;
+	animation: companion-art-inky-settle 520ms steps(1, end) forwards;
+}
+
+.companion-art-inky[data-reaction="landing"] .companion-art-body {
+	visibility: visible;
+	animation: companion-art-inky-restore 520ms steps(1, end) forwards;
+}
+
+@keyframes companion-art-inky-wriggle {
+	0%,
+	22%,
+	44% {
+		background-position: 33.333333% 0;
+	}
+	11%,
+	33% {
+		background-position: 100% 0;
+	}
+	60%,
+	100% {
+		background-position: 66.666667% 0;
+	}
+}
+
+@keyframes companion-art-inky-look {
+	0%,
+	22%,
+	44% {
+		left: 32%;
+	}
+	11%,
+	33% {
+		left: 28%;
+	}
+	60%,
+	100% {
+		left: 31%;
+	}
+}
+
+@keyframes companion-art-inky-land {
+	0% {
+		background-position: 33.333333% 100%;
+		opacity: 1;
+	}
+	28% {
+		background-position: 66.666667% 100%;
+	}
+	65% {
+		background-position: 100% 100%;
+	}
+	82%,
+	100% {
+		opacity: 0;
+	}
+}
+
+@keyframes companion-art-inky-settle {
+	0% {
+		left: 33%;
+		top: 47%;
+		width: 39%;
+		height: 18%;
+	}
+	28%,
+	65% {
+		left: 31%;
+		top: 38%;
+		width: 39%;
+		height: 20%;
+	}
+	82%,
+	100% {
+		left: 29%;
+		top: 38%;
+		width: 40%;
+		height: 22%;
+	}
+}
+
+@keyframes companion-art-inky-restore {
+	0% {
+		opacity: 0;
+	}
+	82%,
+	100% {
+		opacity: 1;
+	}
 }
 
 .companion-art-pixel .companion-art-body,
@@ -1378,6 +1529,14 @@
 	.companion-art[data-sleeping][data-expression][data-reaction]
 		.companion-art-pose {
 		transform: var(--companion-art-sleep-pose);
+	}
+
+	.companion-art-inky[data-physical][data-reaction] .companion-art-sprite {
+		transform: translateY(5%) scale(1.2);
+	}
+
+	.companion-art-inky[data-reaction="landing"] .companion-art-body {
+		visibility: hidden;
 	}
 
 	.companion-art-hoodie[data-reaction="landing"] .companion-art-body {

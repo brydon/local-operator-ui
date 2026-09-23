@@ -139,7 +139,7 @@ test("import copies poses, preserves optional poses and survives removal of sour
 		},
 	});
 	assert.equal(f.library.import(f.manifest).id, result.id);
-	assert.equal(f.library.list().length, 4);
+	assert.equal(f.library.list().length, 5);
 	rmSync(f.source, { recursive: true });
 	assert.deepEqual(
 		new CompanionSkinLibrary(f.libraryPath).get(result.id),
@@ -228,7 +228,7 @@ test("schema requires an idle pose and rejects unsupported or mistyped fields", 
 	}
 	writeFileSync(f.manifest, "{ broken");
 	assert.throws(() => f.library.import(f.manifest), JSON_ERROR);
-	assert.equal(f.library.list().length, 3);
+	assert.equal(f.library.list().length, 4);
 });
 
 test("poses cannot escape the selected folder or fetch a URL", (t) => {
@@ -361,7 +361,7 @@ test("CRC-correct invalid palettes and unknown critical chunks are rejected", (t
 		writeFileSync(join(f.source, "idle.png"), bytes);
 		assert.throws(() => f.library.import(f.manifest), PNG_ERROR);
 	}
-	assert.equal(f.library.list().length, 3);
+	assert.equal(f.library.list().length, 4);
 });
 
 test("inactive packs are not inflated and selected artwork is cached", (t) => {
@@ -375,7 +375,7 @@ test("inactive packs are not inflated and selected artwork is cached", (t) => {
 		syncBuiltinESMExports();
 	});
 	const loaded = new CompanionSkinLibrary(f.libraryPath);
-	assert.equal(loaded.list().length, 5);
+	assert.equal(loaded.list().length, 6);
 	assert.equal(inflate.mock.callCount(), 0);
 	assert.deepEqual(loaded.get(first.id), first);
 	assert.equal(inflate.mock.callCount(), 1);
@@ -434,7 +434,7 @@ test("stored packs are validated individually and a corrupt pack cannot hide a h
 		JSON.stringify({ ...valid, name: "Changed without matching its ID" }),
 	);
 	const loaded = new CompanionSkinLibrary(f.libraryPath);
-	assert.equal(loaded.list().length, 4);
+	assert.equal(loaded.list().length, 5);
 	assert.deepEqual(loaded.get(good.id), good);
 });
 
@@ -453,7 +453,7 @@ test("failed persistence does not leave an imported entry in memory", (t) => {
 	const f = fixture(t);
 	writeFileSync(f.libraryPath, "not a directory");
 	assert.throws(() => f.library.import(f.manifest), SAVE_ERROR);
-	assert.equal(f.library.list().length, 3);
+	assert.equal(f.library.list().length, 4);
 });
 
 test("replacement updates artwork without duplicating the character and removal persists", (t) => {
@@ -465,7 +465,7 @@ test("replacement updates artwork without duplicating the character and removal 
 	assert.notEqual(replaced.id, original.id);
 	assert.equal(replaced.frames.idle, dataUrl(edited));
 	assert.equal(f.library.get(original.id), null);
-	assert.equal(f.library.list().length, 4);
+	assert.equal(f.library.list().length, 5);
 	assert.deepEqual(readdirSync(f.libraryPath), [`${replaced.id}.json`]);
 	const loaded = new CompanionSkinLibrary(f.libraryPath);
 	assert.deepEqual(loaded.get(replaced.id), replaced);
@@ -474,7 +474,7 @@ test("replacement updates artwork without duplicating the character and removal 
 	assert.equal(loaded.get(replaced.id), null);
 	assert.equal(loaded.remove(replaced.id), false);
 	assert.equal(loaded.remove("sprout"), false);
-	assert.equal(new CompanionSkinLibrary(f.libraryPath).list().length, 3);
+	assert.equal(new CompanionSkinLibrary(f.libraryPath).list().length, 4);
 	assert.throws(() => loaded.import(f.manifest, "sprout"), REPLACE_ERROR);
 	assert.throws(() => loaded.import(f.manifest, replaced.id), REPLACE_ERROR);
 });
@@ -486,20 +486,20 @@ test("a full library permits replacements and identical imports", (t) => {
 		const imported = f.library.import(f.write({ name: `Pet ${i}` }));
 		first ??= imported;
 	}
-	assert.equal(f.library.list().length, 67);
+	assert.equal(f.library.list().length, 68);
 	assert.equal(f.library.import(f.write({ name: "Pet 0" })).id, first.id);
 	f.write({ name: "Updated pet" });
 	assert.throws(() => f.library.import(f.manifest), FULL_ERROR);
 	const replacement = f.library.import(f.manifest, first.id);
-	assert.equal(f.library.list().length, 67);
+	assert.equal(f.library.list().length, 68);
 	assert.equal(f.library.get(first.id), null);
 	const loaded = new CompanionSkinLibrary(f.libraryPath);
 	assert.deepEqual(loaded.get(replacement.id), replacement);
-	assert.equal(loaded.list().length, 67);
+	assert.equal(loaded.list().length, 68);
 	const existing = loaded.import(f.write({ name: "Pet 1" }), replacement.id);
 	assert.equal(existing.name, "Pet 1");
-	assert.equal(loaded.list().length, 66);
-	assert.equal(new CompanionSkinLibrary(f.libraryPath).list().length, 66);
+	assert.equal(loaded.list().length, 67);
+	assert.equal(new CompanionSkinLibrary(f.libraryPath).list().length, 67);
 });
 
 test("failed replacement or removal preserves the selected character", (t) => {

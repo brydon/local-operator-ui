@@ -3,6 +3,9 @@ import { type CSSProperties, useState } from "react";
 import hoodieNap from "./assets/companions/hoodie-nap.png";
 import hoodiePeekaboo from "./assets/companions/hoodie-peekaboo.png";
 import hoodiePlay from "./assets/companions/hoodie-play.png";
+import inkyNap from "./assets/companions/inky-nap.png";
+import inkyPeekaboo from "./assets/companions/inky-peekaboo.png";
+import inkyPlay from "./assets/companions/inky-play.png";
 import pixelNap from "./assets/companions/pixel-nap.png";
 import pixelPeekaboo from "./assets/companions/pixel-peekaboo.png";
 import pixelPlay from "./assets/companions/pixel-play.png";
@@ -23,11 +26,17 @@ export type CompanionSpriteAction =
 const sheets = {
 	sprout: { peekaboo: sproutPeekaboo, playful: sproutPlay, nap: sproutNap },
 	hoodie: { peekaboo: hoodiePeekaboo, playful: hoodiePlay, nap: hoodieNap },
+	inky: { peekaboo: inkyPeekaboo, playful: inkyPlay, nap: inkyNap },
 	pixel: { peekaboo: pixelPeekaboo, playful: pixelPlay, nap: pixelNap },
 };
 
 // Register the generated rows to a shared floor without changing the source art.
 const offsets = {
+	inky: {
+		peekaboo: [-3.1, -4.2, -4, -3.6, -3.6, -3.1, -2.9, -3.1],
+		playful: [-3.6, -3.3, -3.3, -3.3, 4.1, 4.1, 3.4, 3.4],
+		nap: [-4.2, -2.9, -1.3, -0.4, -0.2, -2.2, -1.1, -3.6],
+	},
 	sprout: {
 		peekaboo: [-4.4, -4.4, -4.4, -4.4, 1.9, 1.9, 1.9, 1.9],
 		playful: [-4.4, -4.4, -4.4, -4.4, 3.5, 3.5, 3.5, 3.5],
@@ -46,6 +55,11 @@ const offsets = {
 };
 
 const restingRegistration = {
+	inky: {
+		peekaboo: "translate(-0.1%, -2.9%) scale(0.942, 0.981)",
+		playful: "translate(-0.65%, 2.5%) scale(1.013, 1.096)",
+		nap: "translate(-0.9%, -3.4%) scale(0.957, 0.976)",
+	},
 	sprout: {
 		peekaboo: "translate(0.77%, 4.03%) scale(1.015, 1.076)",
 		playful: "translate(-0.38%, 5.65%) scale(1.056, 1.061)",

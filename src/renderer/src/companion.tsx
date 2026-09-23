@@ -116,7 +116,9 @@ function Companion() {
 			play.cancel();
 	}, [interaction.reaction, play.cancel]);
 	const character =
-		appearance.id === "hoodie" || appearance.id === "pixel"
+		appearance.id === "hoodie" ||
+		appearance.id === "pixel" ||
+		appearance.id === "inky"
 			? appearance.id
 			: "sprout";
 	const [motion, setMotion] = useState<CompanionMotion>("rest");

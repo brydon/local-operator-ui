@@ -60,3 +60,6 @@ characters have separate animated eyes.
 The bundled Sprout, Hoodie, and Pixel artwork, including their peekaboo, play, and nap sheets and Hoodie's pickup sheet, was generated with Codex image
 generation on 2026-09-22. Their colors and ambient motion are part of the artwork;
 controls use the app theme. Reduced motion disables movement and blinking.
+
+Inky was adapted from user-provided artwork with Codex image generation on
+2026-09-23, including pickup, peekaboo, play, and nap sheets.

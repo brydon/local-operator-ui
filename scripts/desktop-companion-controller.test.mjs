@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -24,9 +24,10 @@ const bundle = buildSync({
 
 const ok = (result) => ({ status: 200, body: { result } });
 
-function fixture(t, { headless = true } = {}) {
+function fixture(t, { headless = true, preferences } = {}) {
 	const directory = mkdtempSync(join(tmpdir(), "companion-controller-"));
 	const preferencesPath = join(directory, "preferences.json");
+	if (preferences) writeFileSync(preferencesPath, JSON.stringify(preferences));
 	const handlers = new Map();
 	const ipcMain = new EventEmitter();
 	ipcMain.handle = (name, handler) => handlers.set(name, handler);
@@ -899,6 +900,38 @@ test("play stays in the pet window and a stale menu cannot interrupt work or cha
 	assert.equal(plays().length, 3);
 });
 
+test("Inky selection persists and remains protected as a built-in character", (t) => {
+	const f = fixture(t);
+	f.companion.characterMenu.find((item) => item.label === "Inky").click();
+	assert.equal(f.preferences().character, "inky");
+	assert.equal(
+		f.handlers.get("companion:get-appearance")(f.trusted()).id,
+		"inky",
+	);
+	assert.equal(f.windows[0].messages.at(-1)[1].id, "inky");
+	const restarted = fixture(t, { preferences: f.preferences() });
+	assert.equal(restarted.companion.appearance.id, "inky");
+	const menu = restarted.companion.characterMenu;
+	assert.equal(menu.filter((item) => item.checked).length, 1);
+	assert.equal(menu.find((item) => item.label === "Inky").checked, true);
+	assert.equal(
+		menu.some((item) =>
+			["Replace artwork…", "Remove character"].includes(item.label),
+		),
+		false,
+	);
+	restarted.companion.removeCharacter("inky");
+	assert.equal(restarted.companion.appearance.id, "inky");
+	assert.throws(
+		() =>
+			restarted.companion.importCharacter(
+				join(root, "src/renderer/src/assets/companions/sprout.png"),
+				"inky",
+			),
+		{ message: "Choose a custom companion to replace." },
+	);
+});
+
 test("custom artwork can be replaced and removed through the shared character menu", (t) => {
 	const f = fixture(t);
 	const art = (name) =>
@@ -911,7 +944,7 @@ test("custom artwork can be replaced and removed through the shared character me
 	f.companion.importCharacter(art("hoodie"), first);
 	const replaced = f.companion.appearance.id;
 	assert.notEqual(first, replaced);
-	assert.equal(f.companion.characters.length, 4);
+	assert.equal(f.companion.characters.length, 5);
 	assert.equal(f.preferences().character, replaced);
 	const remove = f.companion.characterMenu.find(
 		(item) => item.label === "Remove character",
@@ -919,7 +952,7 @@ test("custom artwork can be replaced and removed through the shared character me
 	remove.click();
 	assert.equal(f.companion.appearance.id, "sprout");
 	assert.equal(f.preferences().character, "sprout");
-	assert.equal(f.companion.characters.length, 3);
+	assert.equal(f.companion.characters.length, 4);
 	assert.equal(
 		f.companion.characterMenu.some((item) => item.label === "Remove character"),
 		false,
