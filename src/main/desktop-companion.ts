@@ -484,7 +484,7 @@ export class DesktopCompanion {
 			this.disposed ||
 			!this.window ||
 			this.chatOpen ||
-			(this.state.mood !== "idle" && this.state.mood !== "complete")
+			!["idle", "complete", "offline"].includes(this.state.mood)
 		)
 			return;
 		this.cancelDrop();
@@ -513,7 +513,7 @@ export class DesktopCompanion {
 				label: "Play",
 				enabled:
 					!this.chatOpen &&
-					(this.state.mood === "idle" || this.state.mood === "complete"),
+					["idle", "complete", "offline"].includes(this.state.mood),
 				submenu: [
 					{ label: "Offer a treat", click: () => this.play("snack") },
 					{ label: "Keep it up", click: () => this.play("bounce") },

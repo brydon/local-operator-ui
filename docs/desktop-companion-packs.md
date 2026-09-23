@@ -18,6 +18,11 @@ brings a yawn. A little extra affection can reveal a surprise. These use your lo
 and give way to chat or work. Reduced motion skips idle antics, keeps reactions still,
 and disables the drop.
 
+Right-click **Play** to offer a treat, keep a ball up, or guess which hand holds a seed.
+Click the pet or press Enter for treats and bounces; choose a hand by clicking a side
+or pressing Left or Right. Escape, dragging, chat, and incoming work end play.
+Reduced motion lets you bounce at your own pace. Long naps sometimes bring tiny dreams.
+
 ## Custom characters
 
 Right-click the pet and choose **Character > Add character…**, or use

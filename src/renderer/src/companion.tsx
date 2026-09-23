@@ -18,6 +18,8 @@ import type { CompanionAppearance } from "../../shared/companion-skin";
 import { CompanionArt } from "./companion-art";
 import { CompanionChat } from "./companion-chat";
 import { useCompanionInteraction } from "./companion-interaction";
+import { useCompanionPlay } from "./companion-play";
+import { CompanionDream, CompanionPlayArt } from "./companion-play-art";
 
 declare global {
 	interface Window {
@@ -92,18 +94,41 @@ function Companion() {
 		window.companion.getChat,
 		window.companion.onChat,
 	);
-	const interaction = useCompanionInteraction(state.mood, chat.open);
+	const play = useCompanionPlay(
+		!chat.open && ["idle", "complete", "offline"].includes(state.mood),
+		appearance.id,
+	);
+	const interaction = useCompanionInteraction(
+		state.mood,
+		chat.open || play.scene !== null,
+	);
+	const playing = play.scene !== null;
+	useEffect(() => window.companion.onPlay(play.start), [play.start]);
+	useEffect(() => {
+		if (playing)
+			document
+				.querySelector<HTMLButtonElement>(".companion-character")
+				?.focus({ preventScroll: true });
+	}, [playing]);
+	useEffect(() => {
+		if (["grabbed", "dragging", "struggling"].includes(interaction.reaction))
+			play.cancel();
+	}, [interaction.reaction, play.cancel]);
+	const character =
+		appearance.id === "hoodie" || appearance.id === "pixel"
+			? appearance.id
+			: "sprout";
 	const [motion, setMotion] = useState<CompanionMotion>("rest");
 	const [chatFocused, setChatFocused] = useState(false);
 	const reaction =
 		motion !== "rest"
 			? motion
-			: chat.open &&
-					chatFocused &&
-					(interaction.reaction === "rest" ||
-						interaction.reaction === "curious")
-				? "listening"
-				: interaction.reaction;
+			: (play.reaction ??
+				(chat.open &&
+				chatFocused &&
+				(interaction.reaction === "rest" || interaction.reaction === "curious")
+					? "listening"
+					: interaction.reaction));
 	const needsAttention =
 		!!state.sessionId && (state.mood === "attention" || state.mood === "error");
 	const sleeping =
@@ -116,11 +141,12 @@ function Companion() {
 	const failedImages = failedArt.id === appearance.id ? failedArt.sources : [];
 	const customImage = [
 		sleeping ? appearance.frames?.sleeping : undefined,
-		appearance.frames?.[state.mood],
+		appearance.frames?.[play.scene ? "idle" : state.mood],
 		appearance.frames?.idle,
 	].find((source) => source && !failedImages.includes(source));
 	const acknowledgment =
-		reaction === "loved"
+		play.announcement ||
+		(reaction === "loved"
 			? `${appearance.name} sends you a heart.`
 			: reaction === "starstruck"
 				? `${appearance.name} lights up with delight.`
@@ -128,7 +154,14 @@ function Companion() {
 					? `${appearance.name} looks happy.`
 					: reaction === "found"
 						? `You found ${appearance.name}.`
-						: "";
+						: "");
+	const playHint = play.scene
+		? play.scene.kind === "guess"
+			? "Choose the left or right hand. Click a side or use Left or Right. Escape ends play."
+			: play.scene.kind === "bounce"
+				? "Click or press Enter to keep the ball up. Escape ends play."
+				: "Click or press Enter to offer the treat. Escape ends play."
+		: undefined;
 	useEffect(() => {
 		const unsubscribe = window.companion.onMotion(setMotion);
 		const preference = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -200,6 +233,7 @@ function Companion() {
 		<main
 			className={cn("companion")}
 			data-mood={state.mood}
+			data-play={play.scene?.kind}
 			onFocusCapture={(event) =>
 				setChatFocused(!!event.target.closest(".companion-chat"))
 			}
@@ -216,9 +250,10 @@ function Companion() {
 					className={cn("companion-character")}
 					{...interaction.handlers}
 					data-reaction={reaction}
-					aria-label={`${appearance.name}. ${sleeping ? "Sleeping. Click to wake." : `${state.label}. Click to pet.`} Use the chat button to talk. Drag or use arrow keys to move. Right-click for options.`}
+					aria-label={`${appearance.name}. ${playHint ?? `${sleeping ? "Sleeping. Click to wake." : `${state.label}. Click to pet.`} Use the chat button to talk. Drag or use arrow keys to move. Right-click for options.`}`}
 					onContextMenu={(event) => {
 						event.preventDefault();
+						play.cancel();
 						interaction.reset();
 						window.companion.showMenu();
 					}}
@@ -242,12 +277,22 @@ function Companion() {
 							window.companion.drag("move");
 					}}
 					onPointerUp={(event) => {
-						if (interaction.handlers.onPointerUp(event) === null) return;
+						const gesture = interaction.handlers.onPointerUp(event);
+						if (gesture === null) return;
+						if (gesture === "tap" && play.scene) {
+							const bounds = event.currentTarget.getBoundingClientRect();
+							play.tap(
+								event.clientX < bounds.left + bounds.width / 2
+									? "left"
+									: "right",
+							);
+						} else if (gesture === "drag") play.cancel();
 						if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
 						window.companion.drag("end");
 						event.currentTarget.releasePointerCapture(event.pointerId);
 					}}
 					onPointerCancel={() => {
+						play.cancel();
 						interaction.handlers.onPointerCancel();
 						window.companion.drag("cancel");
 					}}
@@ -256,7 +301,10 @@ function Companion() {
 						window.companion.drag("cancel");
 					}}
 					onClick={(event) => {
-						if (event.detail === 0) interaction.tap();
+						if (event.detail === 0) {
+							if (play.scene) play.tap();
+							else interaction.tap();
+						}
 					}}
 					onKeyDown={(event) => {
 						if (
@@ -264,13 +312,24 @@ function Companion() {
 							(event.shiftKey && event.key === "F10")
 						) {
 							event.preventDefault();
+							play.cancel();
 							interaction.reset();
 							window.companion.showMenu();
 						}
 						if (event.key === "Escape") {
 							event.preventDefault();
+							play.cancel();
 							interaction.reset();
 							if (chat.open) window.companion.collapseChat();
+						}
+						if (
+							play.scene?.kind === "guess" &&
+							(event.key === "ArrowLeft" || event.key === "ArrowRight")
+						) {
+							event.preventDefault();
+							if (!event.repeat)
+								play.tap(event.key === "ArrowLeft" ? "left" : "right");
+							return;
 						}
 						if (
 							event.key === "ArrowLeft" ||
@@ -279,6 +338,7 @@ function Companion() {
 							event.key === "ArrowDown"
 						) {
 							event.preventDefault();
+							play.cancel();
 							interaction.wake();
 							window.companion.nudge(event.key);
 						}
@@ -318,16 +378,16 @@ function Companion() {
 						</>
 					) : (
 						<CompanionArt
-							character={
-								appearance.id === "hoodie" || appearance.id === "pixel"
-									? appearance.id
-									: "sprout"
-							}
-							mood={state.mood}
+							character={character}
+							mood={play.scene ? "idle" : state.mood}
 							gaze={interaction.gaze}
 							reaction={reaction}
 						/>
 					)}
+					{play.scene && (
+						<CompanionPlayArt scene={play.scene} character={character} />
+					)}
+					{sleeping && !customImage && <CompanionDream character={character} />}
 				</button>
 				{needsAttention && (
 					<Button

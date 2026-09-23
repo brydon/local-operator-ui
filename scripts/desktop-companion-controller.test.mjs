@@ -776,8 +776,14 @@ test("play stays in the pet window and a stale menu cannot interrupt work or cha
 	f.action("menu");
 	assert.equal(
 		f.menus.at(-1).template.find((item) => item.label === "Play").enabled,
-		false,
+		true,
 	);
+	f.menus
+		.at(-1)
+		.template.find((item) => item.label === "Play")
+		.submenu[0].click();
+	assert.equal(plays().length, 1, "offline pets can play without a provider");
+	window.messages.length = 0;
 	await f.catalogue("idle");
 	f.action("menu");
 	const menu = f.menus.at(-1).template.find((item) => item.label === "Play");
