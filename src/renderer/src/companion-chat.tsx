@@ -1,7 +1,7 @@
 import { Button } from "@shared/components/ui/button";
 import { Textarea } from "@shared/components/ui/textarea";
 import { cn } from "@shared/lib/utils";
-import { ArrowUp, ArrowUpRight, ChevronUp, Plus } from "lucide-react";
+import { ArrowUp, ArrowUpRight, ChevronDown, Plus } from "lucide-react";
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type { CompanionChatSnapshot } from "../../shared/companion-chat";
 import { COMPANION_CHAT_MAX_CHARS } from "../../shared/companion-chat";
@@ -260,7 +260,7 @@ export function CompanionChat({
 							title="Collapse chat"
 							onClick={onCollapse}
 						>
-							<ChevronUp size={14} aria-hidden="true" />
+							<ChevronDown size={14} aria-hidden="true" />
 						</Button>
 					</div>
 				</form>
