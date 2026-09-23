@@ -296,6 +296,7 @@ test("headless companion never presents or changes desktop workspaces", (t) => {
 	window.emit("ready-to-show");
 	assert.equal(window.options.show, false);
 	assert.equal(window.options.focusable, false);
+	assert.equal(window.options.webPreferences.backgroundThrottling, false);
 	assert.equal(window.options.webPreferences.zoomMode, "isolated");
 	assert.equal(window.options.webPreferences.zoomFactor, 1);
 	assert.deepEqual(window.presentations, []);
@@ -316,6 +317,8 @@ test("visible companion presents once without focus and accepts the first click"
 	assert.deepEqual(window.presentations, ["inactive"]);
 	assert.equal(window.options.acceptFirstMouse, true);
 	assert.equal(window.options.focusable, true);
+	assert.equal(window.options.webPreferences.backgroundThrottling, true);
+	assert.equal(window.options.alwaysOnTop, true);
 	assert.equal(window.workspaces[1].skipTransformProcessType, true);
 	assert.equal(window.options.type, undefined);
 });

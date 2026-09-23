@@ -188,7 +188,7 @@ export class DesktopCompanion {
 				sandbox: true,
 				zoomMode: "isolated",
 				zoomFactor: 1,
-				backgroundThrottling: false,
+				backgroundThrottling: !this.options.headless,
 			},
 		});
 		this.window = window;
