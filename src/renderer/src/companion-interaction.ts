@@ -5,6 +5,7 @@ import {
 	type CompanionMood,
 } from "../../shared/desktop-companion";
 import type { CompanionReaction } from "./companion-art";
+import { type CompanionScene, getCompanionScene } from "./companion-scenes";
 
 type DelightReaction =
 	| "happy"
@@ -19,10 +20,7 @@ type DelightReaction =
 	| "peeking"
 	| "found"
 	| "playful"
-	| "bubbles"
-	| "leafplay"
-	| "shell"
-	| "cuddle";
+	| CompanionScene;
 
 export function useCompanionInteraction(
 	mood: CompanionMood = "idle",
@@ -91,7 +89,11 @@ export function useCompanionInteraction(
 				reaction === "playful" ||
 				reaction === "bubbles" ||
 				reaction === "leafplay" ||
-				reaction === "shell"
+				reaction === "shell" ||
+				reaction === "relax" ||
+				reaction === "balance" ||
+				reaction === "spin" ||
+				reaction === "juggle"
 					? reaction
 					: null;
 			setDelight(reaction);
@@ -149,6 +151,14 @@ export function useCompanionInteraction(
 								: hour >= 11 && hour <= 20
 									? "daydream"
 									: "yawning";
+						const signature =
+							currentCharacter.current === "hoodie"
+								? "relax"
+								: currentCharacter.current === "pixel"
+									? "balance"
+									: currentCharacter.current === "sprout"
+										? "spin"
+										: null;
 						const scenes: DelightReaction[] =
 							currentCharacter.current === "inky"
 								? [
@@ -160,15 +170,20 @@ export function useCompanionInteraction(
 										"playful",
 										"shell",
 										timeOfDay,
+										"juggle",
+										"daydream",
 									]
-								: ["peekaboo", timeOfDay, "playful", "daydream"];
+								: [
+										"peekaboo",
+										timeOfDay,
+										"playful",
+										"daydream",
+										...(signature ? ([signature, timeOfDay] as const) : []),
+									];
 						const scene = scenes[nextScene.current % scenes.length];
 						const duration =
-							scene === "peekaboo"
-								? 4800
-								: ["playful", "bubbles", "leafplay", "shell"].includes(scene)
-									? 4000
-									: 2600;
+							getCompanionScene(currentCharacter.current, scene)?.duration ??
+							(scene === "peekaboo" ? 4800 : scene === "playful" ? 4000 : 2600);
 						if (
 							!origin.current &&
 							!attention.current.hovered &&

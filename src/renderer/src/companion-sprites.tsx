@@ -3,20 +3,25 @@ import { type CSSProperties, useState } from "react";
 import hoodieNap from "./assets/companions/hoodie-nap.png";
 import hoodiePeekaboo from "./assets/companions/hoodie-peekaboo.png";
 import hoodiePlay from "./assets/companions/hoodie-play.png";
+import hoodieRelax from "./assets/companions/hoodie-relax.png";
 import inkyBubbles from "./assets/companions/inky-bubbles.png";
 import inkyCuddle from "./assets/companions/inky-cuddle.png";
+import inkyJuggle from "./assets/companions/inky-juggle.png";
 import inkyLeafplay from "./assets/companions/inky-leafplay.png";
 import inkyNap from "./assets/companions/inky-nap.png";
 import inkyPeekaboo from "./assets/companions/inky-peekaboo.png";
 import inkyPlay from "./assets/companions/inky-play.png";
 import inkyShell from "./assets/companions/inky-shell.png";
+import pixelBalance from "./assets/companions/pixel-balance.png";
 import pixelNap from "./assets/companions/pixel-nap.png";
 import pixelPeekaboo from "./assets/companions/pixel-peekaboo.png";
 import pixelPlay from "./assets/companions/pixel-play.png";
 import sproutNap from "./assets/companions/sprout-nap.png";
 import sproutPeekaboo from "./assets/companions/sprout-peekaboo.png";
 import sproutPlay from "./assets/companions/sprout-play.png";
+import sproutSpin from "./assets/companions/sprout-spin.png";
 import type { BuiltinCompanionCharacter } from "./companion-art";
+import { type CompanionScene, getCompanionScene } from "./companion-scenes";
 import "./companion-sprites.css";
 
 export type CompanionSpriteAction =
@@ -26,9 +31,36 @@ export type CompanionSpriteAction =
 	| "playful"
 	| "dozing"
 	| "waking"
-	| keyof typeof inkyStories;
+	| CompanionScene;
 
-const inkyStories = {
+const stories: Record<
+	CompanionScene,
+	{ source: string; offsets: number[]; x: number; scale: string }
+> = {
+	relax: {
+		source: hoodieRelax,
+		offsets: [-2.7, -2.48, -4.25, -4.25, 3.51, 3.95, 3.51, -0.04],
+		x: -1.01,
+		scale: "0.958, 0.981",
+	},
+	balance: {
+		source: pixelBalance,
+		offsets: [0.86, 0.86, 0.86, 0.86, 0.86, 0.86, 0.86, 0.86],
+		x: -0.2,
+		scale: "0.910, 0.974",
+	},
+	spin: {
+		source: sproutSpin,
+		offsets: [-2.18, -2.18, -2.65, -2.18, 1.85, 2.8, 2.8, 2.8],
+		x: -0.08,
+		scale: "1.055, 1.047",
+	},
+	juggle: {
+		source: inkyJuggle,
+		offsets: [-4.22, -3.99, -4.46, -4.22, 0.52, 0.29, 1.24, -0.9],
+		x: 0.78,
+		scale: "0.986, 1.052",
+	},
 	bubbles: {
 		source: inkyBubbles,
 		offsets: [-0.9, -0.9, -0.66, -0.66, -0.88, -0.88, -0.88, -0.88],
@@ -114,10 +146,9 @@ export function CompanionSprite({
 	action,
 }: { character: BuiltinCompanionCharacter; action: CompanionSpriteAction }) {
 	const [ready, setReady] = useState(false);
-	const story =
-		character === "inky" && action in inkyStories
-			? inkyStories[action as keyof typeof inkyStories]
-			: undefined;
+	const story = getCompanionScene(character, action)
+		? stories[action as CompanionScene]
+		: undefined;
 	const sheet =
 		action === "dozing" || action === "waking"
 			? "nap"

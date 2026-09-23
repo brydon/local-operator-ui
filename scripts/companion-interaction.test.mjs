@@ -370,6 +370,7 @@ test("Inky rotates discoveries without adding idle opportunities or delaying sle
 			["bubbles", "daydream", 4000, 2600],
 			["leafplay", "playful", 4000, 4000],
 			["shell", "yawning", 4000, 2600],
+			["juggle", "daydream", 5200, 2600],
 		]) {
 			await advance(27_999);
 			assert.equal(button.dataset.reaction, "rest");
@@ -392,6 +393,52 @@ test("Inky rotates discoveries without adding idle opportunities or delaying sle
 		await advance(28_000);
 		assert.equal(button.dataset.reaction, "peekaboo");
 	});
+});
+
+test("character routines finish before sleep and yield to work and reduced motion", async () => {
+	for (const [character, scene, duration, rests] of [
+		["hoodie", "relax", 6200, 2],
+		["pixel", "balance", 4800, 2],
+		["sprout", "spin", 3600, 2],
+		["inky", "juggle", 5200, 4],
+	]) {
+		await fixture(async (f) => {
+			await f.character(character);
+			for (let i = 0; i < rests; i++) {
+				await f.advance(90_000);
+				await f.event("click");
+			}
+			await f.advance(28_000);
+			assert.equal(f.button.dataset.reaction, scene);
+			await f.advance(duration - 1);
+			assert.equal(f.button.dataset.reaction, scene);
+			await f.advance(1);
+			assert.equal(f.button.dataset.reaction, "rest");
+			await f.advance(62_000 - duration);
+			assert.equal(f.button.dataset.reaction, "dozing");
+			assert.equal(timers.size, 0);
+		});
+		for (const interrupt of [
+			(f) => f.mood("working"),
+			(f) => f.chat(true),
+			(f) => f.reduceMotion(true),
+			(f) => f.visibility(true),
+		]) {
+			await fixture(async (f) => {
+				await f.character(character);
+				for (let i = 0; i < rests; i++) {
+					await f.advance(90_000);
+					await f.event("click");
+				}
+				await f.advance(28_000);
+				assert.equal(f.button.dataset.reaction, scene);
+				await interrupt(f);
+				assert.equal(f.button.dataset.reaction, "rest");
+				await f.advance(duration);
+				assert.equal(f.button.dataset.reaction, "rest");
+			});
+		}
+	}
 });
 
 test("Inky discoveries yield to engagement and never resume a queued scene", async () => {

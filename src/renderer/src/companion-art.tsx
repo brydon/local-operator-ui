@@ -7,6 +7,7 @@ import inkyMotion from "./assets/companions/inky-motion.png";
 import inky from "./assets/companions/inky.png";
 import pixel from "./assets/companions/pixel.png";
 import sprout from "./assets/companions/sprout.png";
+import { type CompanionScene, getCompanionScene } from "./companion-scenes";
 import {
 	CompanionSprite,
 	type CompanionSpriteAction,
@@ -36,10 +37,7 @@ export type CompanionReaction =
 	| "peeking"
 	| "found"
 	| "playful"
-	| "bubbles"
-	| "leafplay"
-	| "shell"
-	| "cuddle";
+	| CompanionScene;
 
 const artwork: Record<BuiltinCompanionCharacter, string> = {
 	sprout,
@@ -546,7 +544,10 @@ function useFaceAnimation(
 			window.clearTimeout(timer);
 			const stopped = document.hidden || motion.matches;
 			setPaused(stopped);
-			if (listening && !faceBeats[cursor.current].attentive) {
+			if (
+				(listening && !faceBeats[cursor.current].attentive) ||
+				(motion.matches && faceBeats[cursor.current].settle)
+			) {
 				cursor.current = seed;
 				recent.current = [...recent.current.slice(-3), seed];
 				setIndex(seed);
@@ -1089,18 +1090,19 @@ export function CompanionArt({
 		expressionMood === "idle" &&
 		["stretching", "yawning", "daydream"].includes(reaction);
 	const sleeping = expressionMood === "idle" && reaction === "dozing";
+	const story = getCompanionScene(character, reaction);
 	const sprite =
 		expressionMood === "idle" &&
 		(["peekaboo", "peeking", "found", "playful", "dozing", "waking"].includes(
 			reaction,
 		) ||
-			(character === "inky" &&
-				["bubbles", "leafplay", "shell", "cuddle"].includes(reaction)));
+			story !== undefined);
 	const face = useFaceAnimation(lively, character, reaction === "listening");
 	const interacting = reaction !== "rest" && reaction !== "dozing" && !vignette;
 	const x = reaction === "listening" ? -0.55 : interacting ? gaze.x : 0;
 	const y = reaction === "listening" ? -0.45 : interacting ? gaze.y : 0;
 	const tracking = {
+		"--companion-story-duration": story ? `${story.duration}ms` : undefined,
 		"--companion-art-gaze-x": `${x * 7}px`,
 		"--companion-art-gaze-y": `${y * 4}px`,
 		"--companion-art-tilt": `${x * 2 + 1.5}deg`,

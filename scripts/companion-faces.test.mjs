@@ -214,7 +214,7 @@ test("a varied, mostly cheerful cycle bridges brief special faces with everyday 
 		});
 });
 
-test("each pet's silly face pauses for reduced motion and yields to tasks or listening", async () => {
+test("each pet's silly face settles for reduced motion and yields to tasks or listening", async () => {
 	for (const character of ["sprout", "hoodie", "pixel", "inky"])
 		await fixture(async ({ render, emotion, step, reduceMotion }) => {
 			await render({ character });
@@ -222,7 +222,8 @@ test("each pet's silly face pauses for reduced motion and yields to tasks or lis
 			const before = emotion();
 			assert.ok(silly.has(before));
 			await reduceMotion(true);
-			assert.equal(emotion(), before);
+			const settled = emotion();
+			assert.ok(attentive.has(settled));
 			assert.equal(timers.size, 0);
 			for (const mood of ["working", "attention", "error"]) {
 				await render({ mood });
@@ -230,7 +231,7 @@ test("each pet's silly face pauses for reduced motion and yields to tasks or lis
 				assert.equal(timers.size, 0);
 			}
 			await render({ mood: "idle" });
-			assert.equal(emotion(), before);
+			assert.equal(emotion(), settled);
 			await render({ reaction: "listening" });
 			assert.ok(attentive.has(emotion()));
 			assert.equal(timers.size, 0);
