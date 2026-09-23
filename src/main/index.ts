@@ -376,8 +376,6 @@ function configureAboutPanel(): void {
  * macOS-only items are prepended below, and the About item carries a handler of
  * its own rather than Electron's `about` role: see the comment on it.
  */
-let desktopCompanion: DesktopCompanion | null = null;
-
 function createApplicationMenu(): void {
 	// Check if we're in development mode
 	const isDev = Boolean(process.env.ELECTRON_RENDERER_URL);
@@ -1106,6 +1104,7 @@ const devDriverWebPreferences =
 // Some APIs can only be used after this event occurs.
 // Define mainWindow at a higher scope to be accessible in event handlers
 let mainWindow: BrowserWindow | null = null;
+let desktopCompanion: DesktopCompanion | null = null;
 
 /*
  * The update service of the most recent window, kept here rather than in the

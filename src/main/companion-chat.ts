@@ -5,30 +5,27 @@ import {
 	type CompanionChatSendResult,
 	type CompanionChatSnapshot,
 } from "../shared/companion-chat";
-
-interface DesktopReply {
-	status: number;
-	body: unknown;
-}
+import type { DesktopResponse } from "../shared/desktop-contract";
 
 interface CompanionChatOptions {
-	requestDesktop(input: unknown): Promise<DesktopReply>;
+	requestDesktop(input: unknown): Promise<DesktopResponse>;
 	onChange(snapshot: CompanionChatSnapshot): void;
 	cwd: string;
 }
 
-interface PendingSend {
-	requestId: string;
-	text: string;
+interface TurnPosition {
 	epoch: string;
 	generation: number;
 }
 
-interface TurnWait {
+interface PendingSend extends TurnPosition {
+	requestId: string;
+	text: string;
+}
+
+interface TurnWait extends TurnPosition {
 	requestId: string;
 	sawWorking: boolean;
-	epoch: string;
-	generation: number;
 }
 
 const SESSION_ID = /^[a-f0-9]{12}$/;
@@ -47,9 +44,8 @@ function record(value: unknown): Record<string, unknown> | null {
 		: null;
 }
 
-function result(reply: DesktopReply): Record<string, unknown> {
-	const body = record(reply.body);
-	const value = record(body?.result);
+function result(reply: DesktopResponse): Record<string, unknown> {
+	const value = record(record(reply.body)?.result);
 	if (reply.status < 200 || reply.status >= 300 || !value) {
 		throw new Error(
 			"The request could not be confirmed. Open the app for details.",
@@ -118,18 +114,16 @@ function transcript(
 	return Array.from(messages.values()).slice(-60);
 }
 
-/** A small chat client over the same authenticated desktop protocol as the main window. */
 export class CompanionChatService {
 	private state = initial();
 	private generation = 0;
 	private readId = 0;
 	private disposed = false;
-	private sending: number | null = null;
+	private sending = false;
 	private refreshing: Promise<void> | null = null;
 	private createRequestId = randomUUID();
 	private pending: PendingSend | null = null;
 	private waiting: TurnWait | null = null;
-	private remoteTurn = { epoch: "", generation: 0 };
 
 	constructor(private readonly options: CompanionChatOptions) {}
 
@@ -153,12 +147,10 @@ export class CompanionChatService {
 	newChat(): void {
 		if (this.disposed) return;
 		this.generation++;
-		this.readId++;
-		this.sending = null;
+		this.sending = false;
 		this.refreshing = null;
 		this.pending = null;
 		this.waiting = null;
-		this.remoteTurn = { epoch: "", generation: 0 };
 		this.createRequestId = randomUUID();
 		this.update(initial());
 	}
@@ -180,21 +172,21 @@ export class CompanionChatService {
 		await this.refresh();
 	}
 
-	private async read(generation: number): Promise<boolean> {
+	private async read(generation: number): Promise<TurnPosition | null> {
 		const sessionId = this.state.sessionId;
-		if (!sessionId) return false;
+		if (!sessionId) return null;
 		const readId = ++this.readId;
-		let reply: DesktopReply;
+		let reply: DesktopResponse;
 		try {
 			reply = await this.options.requestDesktop({
 				op: "sessions.get",
 				sessionId,
 			});
 		} catch (error) {
-			if (!this.current(generation) || readId !== this.readId) return false;
+			if (!this.current(generation) || readId !== this.readId) return null;
 			throw error;
 		}
-		if (!this.current(generation) || readId !== this.readId) return false;
+		if (!this.current(generation) || readId !== this.readId) return null;
 		const frame = result(reply);
 		const payload = record(frame.payload);
 		const frontend = record(record(payload?.frontend)?.snapshot);
@@ -219,31 +211,33 @@ export class CompanionChatService {
 			payload?.cold_reason === "owner-silent" ||
 			payload?.cold_reason === "owner-leaving";
 		const failed = frontend.last_turn_outcome === "error";
-		this.remoteTurn = {
+		const turn = {
 			epoch: typeof frontend.epoch === "string" ? frontend.epoch : "",
 			generation:
 				typeof frontend.generation === "number" ? frontend.generation : 0,
 		};
 		let working = frontend.streaming;
-		if (this.waiting) {
-			this.waiting.sawWorking ||= working;
+		const waiting = this.waiting;
+		if (waiting) {
+			waiting.sawWorking ||= working;
 			const position = messages.findIndex(
-				(row) => row.id === this.waiting?.requestId && row.role === "user",
+				(row) => row.id === waiting.requestId && row.role === "user",
 			);
 			const answered =
 				position >= 0 &&
 				messages.slice(position + 1).some((row) => row.role === "assistant");
 			const settled =
-				(this.remoteTurn.epoch === this.waiting.epoch
-					? this.remoteTurn.generation > this.waiting.generation
+				(turn.epoch === waiting.epoch
+					? turn.generation > waiting.generation
 					: position >= 0) &&
 				["completed", "aborted", "error"].includes(
 					String(frontend.last_turn_outcome),
 				);
-			if (!working && (this.waiting.sawWorking || answered || gate || settled))
+			if (!working && (waiting.sawWorking || answered || gate || settled))
 				this.waiting = null;
 			else working = true;
 		}
+		const canSend = !unavailable && !gate && !working;
 		this.update({
 			title:
 				typeof frontend.conversation_title === "string" &&
@@ -269,17 +263,13 @@ export class CompanionChatService {
 						: this.pending
 							? "The earlier send is unconfirmed. Retry its original text to check safely."
 							: null,
-			canSend: !unavailable && !gate && !working && this.sending !== generation,
+			canSend: canSend && !this.sending,
 		});
-		return !unavailable && !gate && !working;
+		return canSend ? turn : null;
 	}
 
 	refresh(): Promise<void> {
-		if (
-			this.disposed ||
-			!this.state.sessionId ||
-			this.sending === this.generation
-		)
+		if (this.disposed || !this.state.sessionId || this.sending)
 			return Promise.resolve();
 		if (this.refreshing) return this.refreshing;
 		const generation = this.generation;
@@ -306,11 +296,7 @@ export class CompanionChatService {
 			accepted,
 			snapshot: this.snapshot,
 		});
-		if (
-			this.disposed ||
-			this.sending === this.generation ||
-			!this.state.canSend
-		)
+		if (this.disposed || this.sending || !this.state.canSend)
 			return outcome(false);
 		if (
 			typeof text !== "string" ||
@@ -329,12 +315,12 @@ export class CompanionChatService {
 			return outcome(false);
 		}
 		const generation = this.generation;
-		this.sending = generation;
+		this.sending = true;
 		this.readId++;
 		this.update({ status: "loading", error: null, canSend: false });
-		let attempted = false;
 		let accepted = false;
-		let refused = false;
+		let failure =
+			"Chat could not start. Your message is still here; try again or open the app.";
 		try {
 			if (!this.state.sessionId) {
 				const created = result(
@@ -352,16 +338,16 @@ export class CompanionChatService {
 					throw new Error("Chat could not start.");
 				this.update({ sessionId: created.session_id });
 			}
-			const allowed = await this.read(generation);
-			if (!this.current(generation)) return outcome(false);
-			if (!allowed) return outcome(false);
+			const turn = await this.read(generation);
+			if (!this.current(generation) || !turn) return outcome(false);
 			const intent = this.pending ?? {
 				text,
 				requestId: randomUUID(),
-				...this.remoteTurn,
+				...turn,
 			};
 			this.pending = intent;
-			attempted = true;
+			failure =
+				"Could not confirm the send. Retry the same message safely, or open the app to check.";
 			const reply = await this.options.requestDesktop({
 				op: "sessions.message",
 				sessionId: this.state.sessionId,
@@ -372,7 +358,8 @@ export class CompanionChatService {
 			if (!this.current(generation)) return outcome(false);
 			if (reply.status === 413 || reply.status === 422) {
 				this.pending = null;
-				refused = true;
+				failure =
+					"The message was not sent. Edit it or open the app for details.";
 			}
 			const admitted = result(reply);
 			if (
@@ -394,15 +381,11 @@ export class CompanionChatService {
 				this.update({
 					status: "error",
 					canSend: true,
-					error: refused
-						? "The message was not sent. Edit it or open the app for details."
-						: attempted
-							? "Could not confirm the send. Retry the same message safely, or open the app to check."
-							: "Chat could not start. Your message is still here; try again or open the app.",
+					error: failure,
 				});
 		} finally {
 			if (this.current(generation)) {
-				this.sending = null;
+				this.sending = false;
 				if (this.state.status === "idle") this.update({ canSend: true });
 			}
 		}
@@ -412,8 +395,6 @@ export class CompanionChatService {
 
 	dispose(): void {
 		this.disposed = true;
-		this.generation++;
-		this.readId++;
 		this.pending = null;
 		this.waiting = null;
 	}

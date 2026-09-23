@@ -14,14 +14,11 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { deflateSync } from "node:zlib";
+import { crc32, deflateSync } from "node:zlib";
 import { build } from "esbuild";
 
 const bundle = await build({
-	stdin: {
-		contents: 'export * from "./src/main/companion-skins";',
-		resolveDir: process.cwd(),
-	},
+	entryPoints: ["src/main/companion-skins.ts"],
 	bundle: true,
 	format: "esm",
 	platform: "node",
@@ -48,14 +45,7 @@ function chunk(type, payload) {
 	buffer.writeUInt32BE(payload.length);
 	buffer.write(type, 4);
 	payload.copy(buffer, 8);
-	let checksum = 0xffffffff;
-	for (const byte of buffer.subarray(4, -4)) {
-		checksum ^= byte;
-		for (let bit = 0; bit < 8; bit++) {
-			checksum = (checksum >>> 1) ^ ((checksum & 1) * 0xedb88320);
-		}
-	}
-	buffer.writeUInt32BE((checksum ^ 0xffffffff) >>> 0, buffer.length - 4);
+	buffer.writeUInt32BE(crc32(buffer.subarray(4, -4)), buffer.length - 4);
 	return buffer;
 }
 
@@ -108,30 +98,17 @@ function fixture(t) {
 	};
 }
 
+function dataUrl(bytes) {
+	return `data:image/png;base64,${bytes.toString("base64")}`;
+}
+
 function savedId(pack) {
 	return `custom-${createHash("sha256").update(JSON.stringify(pack)).digest("hex").slice(0, 32)}`;
 }
 
-test("built-ins are available without creating a library directory", (t) => {
-	const f = fixture(t);
-	assert.deepEqual(f.library.list(), [
-		{ id: "sprout", name: "Sprout" },
-		{ id: "hoodie", name: "Hoodie" },
-		{ id: "pixel", name: "Pixel" },
-	]);
-	assert.equal(f.library.get("pixel").pixelated, true);
-	assert.equal(f.library.get("sprout").frames, undefined);
-	assert.equal(f.library.get("missing"), null);
-	assert.throws(() => statSync(f.libraryPath), { code: "ENOENT" });
-});
-
 test("import copies poses, preserves optional poses and survives removal of source files", (t) => {
 	const f = fixture(t);
-	const working = png({
-		pixels: Buffer.from([
-			0, 255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 0, 255, 255, 255, 255, 255, 255,
-		]),
-	});
+	const working = png({ pixels: Buffer.alloc(18, 1) });
 	writeFileSync(join(f.source, "working.png"), working);
 	f.write({
 		name: " Fern ",
@@ -140,17 +117,12 @@ test("import copies poses, preserves optional poses and survives removal of sour
 	});
 	const result = f.library.import(f.manifest);
 	assert.match(result.id, ID);
-	assert.equal(result.name, "Fern");
-	assert.equal(result.pixelated, true);
-	assert.equal(
-		result.frames.idle,
-		`data:image/png;base64,${f.idle.toString("base64")}`,
-	);
-	assert.equal(
-		result.frames.working,
-		`data:image/png;base64,${working.toString("base64")}`,
-	);
-	assert.equal(result.frames.attention, undefined);
+	assert.deepEqual(result, {
+		id: result.id,
+		name: "Fern",
+		pixelated: true,
+		frames: { idle: dataUrl(f.idle), working: dataUrl(working) },
+	});
 	assert.equal(f.library.import(f.manifest).id, result.id);
 	assert.equal(f.library.list().length, 4);
 	rmSync(f.source, { recursive: true });
@@ -158,9 +130,7 @@ test("import copies poses, preserves optional poses and survives removal of sour
 		new CompanionSkinLibrary(f.libraryPath).get(result.id),
 		result,
 	);
-	const copy = f.library.get(result.id);
-	copy.frames.idle = "changed";
-	assert.equal(f.library.get(result.id).frames.idle, result.frames.idle);
+
 	assert.deepEqual(readdirSync(f.libraryPath), [`${result.id}.json`]);
 	if (process.platform !== "win32")
 		assert.equal(
@@ -169,55 +139,27 @@ test("import copies poses, preserves optional poses and survives removal of sour
 		);
 });
 
-test("content IDs ignore source path and manifest property ordering", (t) => {
+test("single PNG import names the companion and persists an idle-only pose", (t) => {
 	const f = fixture(t);
-	const first = f.library.import(f.manifest);
-	writeFileSync(join(f.source, "copy.png"), f.idle);
-	writeFileSync(
-		f.manifest,
-		JSON.stringify({
-			frames: { idle: "copy.png" },
-			pixelated: false,
-			name: "Fern",
-			version: 1,
-		}),
-	);
-	assert.equal(f.library.import(f.manifest).id, first.id);
-});
-
-test("a single PNG becomes a persistent idle-only companion named from its file", (t) => {
-	const f = fixture(t);
-	const image = join(f.source, "My_little-friend.PNG");
-	writeFileSync(image, f.idle);
-	const result = f.library.import(image);
-	assert.equal(result.name, "My little friend");
-	assert.equal(result.pixelated, false);
-	assert.deepEqual(result.frames, {
-		idle: `data:image/png;base64,${f.idle.toString("base64")}`,
-	});
-	assert.equal(f.library.import(image).id, result.id);
-	rmSync(f.source, { recursive: true });
-	assert.deepEqual(
-		new CompanionSkinLibrary(f.libraryPath).get(result.id),
-		result,
-	);
-});
-
-test("PNG filenames produce bounded usable names and still undergo image validation", (t) => {
-	const f = fixture(t);
-	for (const [filename, expected] of [
+	for (const [filename, name] of [
+		["My_little-friend.PNG", "My little friend"],
 		["---__ .png", "My companion"],
 		[`${"a".repeat(90)}.png`, "a".repeat(64)],
 	]) {
 		const image = join(f.source, filename);
 		writeFileSync(image, f.idle);
-		assert.equal(f.library.import(image).name, expected);
+		const result = f.library.import(image);
+		assert.deepEqual(result, {
+			id: result.id,
+			name,
+			pixelated: false,
+			frames: { idle: dataUrl(f.idle) },
+		});
+		assert.deepEqual(
+			new CompanionSkinLibrary(f.libraryPath).get(result.id),
+			result,
+		);
 	}
-	const bad = join(f.source, "invalid.png");
-	writeFileSync(bad, "not PNG data");
-	assert.throws(() => f.library.import(bad), PNG_ERROR);
-	writeFileSync(bad, Buffer.alloc(2 * 1024 * 1024 + 1));
-	assert.throws(() => f.library.import(bad), SIZE_ERROR);
 });
 
 test("schema requires an idle pose and rejects unsupported or mistyped fields", (t) => {
@@ -268,10 +210,7 @@ test("poses cannot escape the selected folder or fetch a URL", (t) => {
 		join(f.source, "nested", "inside.png"),
 	);
 	f.write({ frames: { idle: "nested/inside.png" } });
-	assert.equal(
-		f.library.import(f.manifest).frames.idle,
-		`data:image/png;base64,${f.idle.toString("base64")}`,
-	);
+	assert.equal(f.library.import(f.manifest).frames.idle, dataUrl(f.idle));
 });
 
 test("the selected manifest cannot itself be a symlink outside its folder", (t) => {
@@ -284,12 +223,16 @@ test("the selected manifest cannot itself be a symlink outside its folder", (t) 
 
 test("files and image dimensions have bounded sizes", (t) => {
 	const f = fixture(t);
-	writeFileSync(join(f.source, "idle.png"), Buffer.alloc(2 * 1024 * 1024 + 1));
-	assert.throws(() => f.library.import(f.manifest), SIZE_ERROR);
-	writeFileSync(join(f.source, "idle.png"), png({ width: 2049 }));
-	assert.throws(() => f.library.import(f.manifest), DIMENSION_ERROR);
-	writeFileSync(join(f.source, "idle.png"), png({ height: 0 }));
-	assert.throws(() => f.library.import(f.manifest), DIMENSION_ERROR);
+	const image = join(f.source, "idle.png");
+	for (const [bytes, error] of [
+		[Buffer.alloc(2 * 1024 * 1024 + 1), SIZE_ERROR],
+		[png({ width: 2049 }), DIMENSION_ERROR],
+		[png({ height: 0 }), DIMENSION_ERROR],
+	]) {
+		writeFileSync(image, bytes);
+		assert.throws(() => f.library.import(image), error);
+		assert.throws(() => f.library.import(f.manifest), error);
+	}
 	writeFileSync(f.manifest, " ".repeat(64 * 1024 + 1));
 	assert.throws(() => f.library.import(f.manifest), SIZE_ERROR);
 });

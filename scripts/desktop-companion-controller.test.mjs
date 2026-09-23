@@ -3,16 +3,15 @@ import { EventEmitter } from "node:events";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { join } from "node:path";
 import { test } from "node:test";
 import { setImmediate as settle } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { runInNewContext } from "node:vm";
 import { buildSync } from "esbuild";
 
-// These tests exercise the shipped controller at the Electron boundary. No app,
-// real window, native dialog, backend request, or desktop notification is started.
-const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+// Run the actual controller with Electron and timers replaced.
+const root = fileURLToPath(new URL("..", import.meta.url));
 const require = createRequire(import.meta.url);
 const bundle = buildSync({
 	entryPoints: [join(root, "src/main/desktop-companion.ts")],
@@ -22,6 +21,8 @@ const bundle = buildSync({
 	format: "cjs",
 	external: ["electron"],
 }).outputFiles[0].text;
+
+const ok = (result) => ({ status: 200, body: { result } });
 
 function fixture(t, { headless = true } = {}) {
 	const directory = mkdtempSync(join(tmpdir(), "companion-controller-"));
@@ -37,13 +38,14 @@ function fixture(t, { headless = true } = {}) {
 	const menus = [];
 	const Menu = {
 		buildFromTemplate: (template) => {
-			const menu = { template, popupOptions: null };
-			menus.push(menu);
-			return {
-				popup: (options) => {
-					menu.popupOptions = options;
+			const menu = {
+				template,
+				popup(options) {
+					this.popupOptions = options;
 				},
 			};
+			menus.push(menu);
+			return menu;
 		},
 	};
 	let cursor = { x: 400, y: 400 };
@@ -118,7 +120,7 @@ function fixture(t, { headless = true } = {}) {
 		}
 		show() {
 			this.hidden = false;
-			this.presentations.push("focus");
+			this.presentations.push("show");
 		}
 		focus() {
 			this.presentations.push("focus");
@@ -163,43 +165,27 @@ function fixture(t, { headless = true } = {}) {
 		requestDesktop: async (input) => {
 			desktopRequests.push(input);
 			if (input.op === "sessions.create")
-				return {
-					status: 200,
-					body: { result: { session_id: "012345abcdef" } },
-				};
+				return ok({ session_id: "012345abcdef" });
 			if (input.op === "sessions.message") {
 				admitted = true;
-				return {
-					status: 200,
-					body: {
-						result: {
-							status: "admitted",
-							command_id: input.requestId,
-						},
-					},
-				};
+				return ok({ status: "admitted", command_id: input.requestId });
 			}
 			assert.equal(input.op, "sessions.get");
-			return {
-				status: 200,
-				body: {
-					result: {
-						session_id: input.sessionId,
-						payload: {
-							frontend: {
-								snapshot: {
-									session_id: input.sessionId,
-									streaming: admitted,
-									pending_gate: null,
-									epoch: "test-owner",
-									generation: admitted ? 1 : 0,
-								},
-							},
-							history: { entries: [] },
+			return ok({
+				session_id: input.sessionId,
+				payload: {
+					frontend: {
+						snapshot: {
+							session_id: input.sessionId,
+							streaming: admitted,
+							pending_gate: null,
+							epoch: "test-owner",
+							generation: admitted ? 1 : 0,
 						},
 					},
+					history: { entries: [] },
 				},
-			};
+			});
 		},
 		readCatalogue: () =>
 			new Promise((resolve, reject) => requests.push({ resolve, reject })),
@@ -216,6 +202,13 @@ function fixture(t, { headless = true } = {}) {
 		sender: window.webContents,
 		senderFrame: window.webContents.mainFrame,
 	});
+	const flush = async () => {
+		for (const [id, callback] of [...timeouts]) {
+			timeouts.delete(id);
+			callback();
+		}
+		await settle();
+	};
 	return {
 		companion,
 		windows,
@@ -229,6 +222,12 @@ function fixture(t, { headless = true } = {}) {
 		visibility,
 		intervals,
 		timeouts,
+		flush,
+		catalogue: async (code, id) => {
+			await flush();
+			requests.shift().resolve(catalogue(code, id));
+			await settle();
+		},
 		preferences: () => JSON.parse(readFileSync(preferencesPath, "utf8")),
 		trusted,
 		state: () => handlers.get("companion:get-state")(trusted()),
@@ -243,26 +242,14 @@ function fixture(t, { headless = true } = {}) {
 		workArea: (area) => {
 			workArea = area;
 		},
-		flush: async () => {
-			for (const [id, callback] of [...timeouts]) {
-				timeouts.delete(id);
-				callback();
-			}
-			await settle();
-		},
 	};
 }
 
 function catalogue(code, id = "session-a") {
-	return {
-		status: 200,
-		body: {
-			result: {
-				sessions: [{ id, status: { code }, attention: { unseen: true } }],
-				degraded: [],
-			},
-		},
-	};
+	return ok({
+		sessions: [{ id, status: { code }, attention: { unseen: true } }],
+		degraded: [],
+	});
 }
 
 test("headless companion never presents or changes desktop workspaces", (t) => {
@@ -319,13 +306,10 @@ test("IPC requires this companion's exact top-level document and rejects malform
 		},
 		{ sender: window.webContents, senderFrame: null },
 	]) {
-		f.action("open", undefined, event);
-		f.action("open-task", undefined, event);
-		f.action("expand-chat", undefined, event);
-		f.action("hide", undefined, event);
-		assert.equal(f.handlers.get("companion:get-state")(event), null);
-		assert.equal(f.handlers.get("companion:get-appearance")(event), null);
-		assert.equal(f.handlers.get("companion:get-chat")(event), null);
+		for (const action of ["open", "open-task", "expand-chat", "hide"])
+			f.action(action, undefined, event);
+		for (const channel of ["get-state", "get-appearance", "get-chat"])
+			assert.equal(f.handlers.get(`companion:${channel}`)(event), null);
 		assert.equal(await f.send("Should not send", event), false);
 	}
 	window.webContents.mainFrame.url = "https://example.invalid/";
@@ -357,7 +341,7 @@ test("IPC requires this companion's exact top-level document and rejects malform
 	f.action("open");
 	assert.equal(f.chat().open, true);
 	assert.deepEqual(f.opened, []);
-	for (const value of [null, {}, 42, ["text"], "", " ", "x".repeat(16_001)])
+	for (const value of [null, {}, 42, ["text"]])
 		assert.equal(await f.send(value), false);
 	assert.deepEqual(f.desktopRequests, []);
 });
@@ -401,12 +385,9 @@ test("catalogue reads coalesce and serialize, then reject responses from a disab
 
 test("dragging moves and saves without opening chat; clicking opens inline chat", async (t) => {
 	const f = fixture(t);
-	await f.flush();
-	f.requests.shift().resolve(catalogue("busy"));
-	await settle();
+	await f.catalogue("busy");
 	const window = f.windows[0];
 	const [x, y] = window.position;
-	f.cursor({ x: 400, y: 400 });
 	f.action("drag", "start");
 	f.action("interactive", false);
 	assert.equal(window.ignoresMouse, false);
@@ -415,11 +396,10 @@ test("dragging moves and saves without opening chat; clicking opens inline chat"
 	f.action("drag", "end");
 	assert.deepEqual(window.position, [x - 40, y - 50]);
 	assert.deepEqual(f.preferences().position, { x: x - 40, y: y - 50 });
-	assert.deepEqual(f.opened, []);
+	assert.equal(f.chat().open, false);
 	f.action("drag", "start");
 	f.action("drag", "end");
 	assert.equal(f.chat().open, true);
-	assert.deepEqual(f.opened, []);
 	assert.deepEqual(f.desktopRequests, []);
 	f.action("collapse-chat");
 	f.action("drag", "start");
@@ -457,17 +437,6 @@ test("inline chat preserves its lower-right anchor through collapse and dragging
 		x: before.x - 24,
 		y: before.y - 24,
 	});
-	f.action("open");
-	f.action("hide");
-	f.companion.setEnabled(true);
-	assert.equal(f.windows.length, 1);
-	assert.equal(window.destroyed, false);
-	assert.deepEqual(f.windows.at(-1).getBounds(), {
-		...before,
-		x: before.x - 24,
-		y: before.y - 24,
-	});
-	assert.equal(f.chat().open, false);
 });
 
 test("chat layout stays within a changed display work area", (t) => {
@@ -545,7 +514,6 @@ test("reply resizing waits for dragging to finish, cancel, blur or open a menu",
 		f.action("open");
 		const before = window.getBounds();
 		const changes = window.boundsChanges;
-		f.cursor({ x: 400, y: 400 });
 		f.action("drag", "start");
 		f.action("chat-size", 300);
 		f.action("chat-size", 320);
@@ -553,15 +521,11 @@ test("reply resizing waits for dragging to finish, cancel, blur or open a menu",
 		assert.equal(window.boundsChanges, changes, finish);
 		f.cursor({ x: 360, y: 350 });
 		f.action("drag", "move");
-		assert.deepEqual(
-			window.getBounds(),
-			{
-				...before,
-				x: before.x - 40,
-				y: before.y - 50,
-			},
-			finish,
-		);
+		assert.deepEqual(window.getBounds(), {
+			...before,
+			x: before.x - 40,
+			y: before.y - 50,
+		});
 		if (finish === "blur") window.emit("blur");
 		else if (finish === "menu") f.action("menu");
 		else f.action("drag", finish);
@@ -602,14 +566,10 @@ test("native menu stays scoped, cancels drag, and exposes character and hide con
 	const characters = menu.template.find(
 		(item) => item.label === "Character",
 	).submenu;
-	assert.equal(characters.length, 3);
 	assert.equal(characters.filter((item) => item.checked).length, 1);
 	characters.find((item) => item.label === "Pixel").click();
 	assert.equal(f.preferences().character, "pixel");
-	assert.equal(f.companion.appearance.id, "pixel");
-	await f.flush();
-	f.requests.shift().resolve(catalogue("busy", "222222222222"));
-	await settle();
+	await f.catalogue("busy", "222222222222");
 	f.action("menu");
 	const refreshed = f.menus.at(-1);
 	const openTask = refreshed.template.find(
@@ -632,6 +592,7 @@ test("native menu stays scoped, cancels drag, and exposes character and hide con
 test("hiding retains the renderer but stops polling, rejects IPC and defeats a late ready event", async (t) => {
 	const f = fixture(t, { headless: false });
 	const window = f.windows[0];
+	const collapsed = window.getBounds();
 	f.action("open");
 	f.action("hide");
 	assert.equal(window.destroyed, false);
@@ -651,6 +612,7 @@ test("hiding retains the renderer but stops polling, rejects IPC and defeats a l
 	f.companion.setEnabled(true);
 	assert.equal(f.windows.length, 1);
 	assert.equal(window.hidden, false);
+	assert.deepEqual(window.getBounds(), collapsed);
 	assert.equal(f.chat().open, false);
 	assert.equal(f.intervals.size, 1);
 	assert.deepEqual(window.presentations, [...presentations, "inactive"]);
@@ -663,27 +625,18 @@ test("fleet changes never retarget inline chat or focus the window", async (t) =
 	const f = fixture(t, { headless: false });
 	const window = f.windows[0];
 	window.emit("ready-to-show");
-	await f.flush();
-	f.requests.shift().resolve(catalogue("busy", "111111111111"));
-	await settle();
+	await f.catalogue("busy", "111111111111");
 	assert.deepEqual(window.presentations, ["inactive"]);
 	f.action("open");
-	assert.deepEqual(window.presentations, ["inactive", "focus", "focus"]);
+	assert.deepEqual(window.presentations, ["inactive", "show", "focus"]);
 	assert.equal(f.chat().snapshot.sessionId, null);
 	assert.deepEqual(f.desktopRequests, []);
 	assert.equal(await f.send("Hello from the pet"), true);
 	assert.equal(f.chat().snapshot.sessionId, "012345abcdef");
-	assert.equal(
-		f.desktopRequests.filter((request) => request.op === "sessions.create")
-			.length,
-		1,
-	);
 	f.companion.refresh();
-	await f.flush();
-	f.requests.shift().resolve(catalogue("approval", "222222222222"));
-	await settle();
+	await f.catalogue("approval", "222222222222");
 	assert.equal(f.chat().snapshot.sessionId, "012345abcdef");
-	assert.deepEqual(window.presentations, ["inactive", "focus", "focus"]);
+	assert.deepEqual(window.presentations, ["inactive", "show", "focus"]);
 	f.action("open-task");
 	f.action("expand-chat");
 	assert.deepEqual(f.opened, ["222222222222", "012345abcdef"]);

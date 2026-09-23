@@ -3,7 +3,6 @@ import type { PointerEvent } from "react";
 
 import type { CompanionReaction } from "./companion-art";
 
-/** Local pointer feedback; never observes the mouse outside this character. */
 export function useCompanionInteraction() {
 	const [hovered, setHovered] = useState(false);
 	const [focused, setFocused] = useState(false);
@@ -52,15 +51,14 @@ export function useCompanionInteraction() {
 	}
 
 	useEffect(() => {
-		const clear = () => reset();
 		const visibility = () => {
-			if (document.hidden) clear();
+			if (document.hidden) reset();
 		};
-		window.addEventListener("blur", clear);
+		window.addEventListener("blur", reset);
 		document.addEventListener("visibilitychange", visibility);
 		return () => {
 			cancelFrame();
-			window.removeEventListener("blur", clear);
+			window.removeEventListener("blur", reset);
 			document.removeEventListener("visibilitychange", visibility);
 		};
 	}, [cancelFrame, reset]);

@@ -47,20 +47,9 @@ The Local Operator UI is a user interface for managing and interacting with the 
 
 ## Desktop companion
 
-A small floating character shows when Local Operator is working, needs your
-attention, or has finished. It looks toward your pointer and reacts to hover,
-press, and dragging. Click it for a small input bubble, right-click for Hide
-and character choices, or use the arrow keys while it is focused. Collapse the panel
-or hide the pet without losing your draft. Expand a conversation into the full
-app for approvals, files, model selection, or a larger workspace. Its position
-and visibility are remembered. Observing task status makes no model calls;
-sending a message uses your configured Local Operator provider.
-
-Use **View > Desktop companion** to show or hide it, and **View > Companion
-character** to choose Sprout, Hoodie, or Pixel. **Add character…** accepts a
-PNG for a character with one pose, or a JSON pack with separate expressions.
-See [the character pack guide](docs/desktop-companion-packs.md) and
-[artwork provenance](docs/companion-artwork.md).
+Use **View > Desktop companion** to show a floating character that follows task
+progress. Click to chat, drag to move, or right-click to hide or change characters.
+Choose Sprout, Hoodie, Pixel, or [add your own character](docs/desktop-companion-packs.md).
 
 ## 🚀 Getting Started
 

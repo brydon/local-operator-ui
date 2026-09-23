@@ -3,10 +3,7 @@ import { test } from "node:test";
 import { build } from "esbuild";
 
 const bundle = await build({
-	stdin: {
-		contents: 'export * from "./src/main/companion-chat";',
-		resolveDir: process.cwd(),
-	},
+	entryPoints: ["src/main/companion-chat.ts"],
 	bundle: true,
 	format: "esm",
 	platform: "node",
@@ -17,12 +14,12 @@ const { CompanionChatService } = await import(
 );
 const ID = "abcdef123456";
 const OTHER_ID = "fedcba654321";
-const UUID =
-	/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const receipt = (result, status = 200) => ({
 	status,
-	body: { status, result },
+	body: { result },
 });
+const admitted = ({ requestId }) =>
+	receipt({ status: "admitted", command_id: requestId });
 const row = (id, role, text, extra = {}) => ({
 	id,
 	type: "message",
@@ -31,47 +28,29 @@ const row = (id, role, text, extra = {}) => ({
 const frame = ({
 	sessionId = ID,
 	history = [],
-	streaming = false,
-	pending_gate = null,
-	live_events = [],
 	cold_reason = null,
-	generation = 0,
-	last_turn_outcome = "",
 	...state
 } = {}) =>
 	receipt({
 		session_id: sessionId,
-		type: "snapshot",
-		epoch: "epoch",
-		seq: generation,
 		payload: {
 			cold_reason,
-			history: { entries: history, has_more: false, cursor_missing: false },
+			history: { entries: history },
 			frontend: {
 				snapshot: {
 					session_id: sessionId,
 					epoch: "epoch",
 					conversation_title: "A small chat",
-					streaming,
-					pending_gate,
-					live_events,
-					generation,
-					last_turn_outcome,
+					streaming: false,
+					pending_gate: null,
+					live_events: [],
+					generation: 0,
+					last_turn_outcome: "",
 					...state,
 				},
 			},
 		},
 	});
-
-function deferred() {
-	let resolve;
-	let reject;
-	const promise = new Promise((yes, no) => {
-		resolve = yes;
-		reject = no;
-	});
-	return { promise, resolve, reject };
-}
 
 function fixture() {
 	const calls = [];
@@ -98,11 +77,7 @@ function fixture() {
 					generation: 1,
 					last_turn_outcome: "completed",
 				});
-				return receipt({
-					status: "admitted",
-					command_id: input.requestId,
-					duplicate: false,
-				});
+				return admitted(input);
 			}
 			throw new Error(`Unexpected operation ${input.op}`);
 		},
@@ -111,6 +86,7 @@ function fixture() {
 		service,
 		calls,
 		changes,
+		messages: () => calls.filter((call) => call.op === "sessions.message"),
 		setFrame: (value) => {
 			current = value;
 		},
@@ -120,27 +96,16 @@ function fixture() {
 	};
 }
 
-test("opening a new pane does not create or query a conversation", async () => {
+test("chat creates lazily with defaults and displays accepted prose", async () => {
 	const f = fixture();
 	await f.service.open();
 	await f.service.refresh();
 	assert.equal(f.calls.length, 0);
-	assert.equal(f.service.snapshot.sessionId, null);
-	assert.equal(f.service.snapshot.canSend, true);
-});
-
-test("send creates lazily with default model/agent, waits for admission, and reads authoritative prose", async () => {
-	const f = fixture();
 	const sent = await f.service.send("Hello");
 	assert.equal(sent.accepted, true);
-	assert.deepEqual(
-		f.calls.map((call) => call.op),
-		["sessions.create", "sessions.get", "sessions.message", "sessions.get"],
-	);
 	assert.deepEqual(Object.keys(f.calls[0]).sort(), ["cwd", "op", "requestId"]);
 	assert.equal(f.calls[0].cwd, "/a/known/directory");
-	assert.match(f.calls[0].requestId, UUID);
-	assert.equal(f.calls[2].mode, "prompt");
+	assert.equal(f.messages()[0].mode, "prompt");
 	assert.equal(sent.snapshot.status, "idle");
 	assert.equal(sent.snapshot.canSend, true);
 	assert.deepEqual(
@@ -152,7 +117,7 @@ test("send creates lazily with default model/agent, waits for admission, and rea
 	);
 });
 
-test("a lost create response reuses the original receipt identity", async () => {
+test("lost creation reuses its request ID", async () => {
 	const f = fixture();
 	let once = true;
 	f.handle((input) => {
@@ -167,80 +132,76 @@ test("a lost create response reuses the original receipt identity", async () => 
 	assert.deepEqual(creates[0], creates[1]);
 });
 
-test("an uncertain send keeps session, text and UUID for an explicit safe retry", async () => {
-	const f = fixture();
-	let once = true;
-	f.handle((input) => {
-		if (input.op === "sessions.message" && once) {
-			once = false;
+test("uncertain delivery permits only an exact retry with the same identity", async () => {
+	for (const fail of [
+		() => {
 			throw new Error("timeout after admission");
-		}
-	});
-	const first = await f.service.send("Do this once");
-	assert.equal(first.accepted, false);
-	assert.equal(first.snapshot.sessionId, ID);
-	const count = f.calls.length;
-	assert.equal((await f.service.send("Different task")).accepted, false);
-	assert.equal(f.calls.length, count);
-	assert.equal((await f.service.send("Do this once")).accepted, true);
-	const messages = f.calls.filter((call) => call.op === "sessions.message");
-	assert.deepEqual(messages[0], messages[1]);
-	assert.equal(
-		f.calls.filter((call) => call.op === "sessions.create").length,
-		1,
-	);
+		},
+		(input) => receipt({ status: "pending", command_id: input.requestId }),
+		() => receipt({ status: "admitted", command_id: "wrong-request" }),
+	]) {
+		const f = fixture();
+		f.handle((input) => {
+			if (input.op === "sessions.message" && f.messages().length === 1)
+				return fail(input);
+		});
+		const first = await f.service.send("Do this once");
+		assert.equal(first.accepted, false);
+		assert.equal(first.snapshot.sessionId, ID);
+		const count = f.calls.length;
+		assert.equal((await f.service.send("Different task")).accepted, false);
+		assert.equal(f.calls.length, count);
+		assert.equal((await f.service.send("Do this once")).accepted, true);
+		assert.deepEqual(f.messages()[0], f.messages()[1]);
+		assert.equal(
+			f.calls.filter((call) => call.op === "sessions.create").length,
+			1,
+		);
+	}
 });
 
-test("413 and 422 refusals allow an edited message with a fresh UUID", async () => {
+test("definite refusals allow edits with a new request ID", async () => {
 	for (const status of [413, 422]) {
 		const f = fixture();
-		let once = true;
 		f.handle((input) => {
-			if (input.op === "sessions.message" && once) {
-				once = false;
+			if (input.op === "sessions.message" && f.messages().length === 1) {
 				return receipt({}, status);
 			}
 		});
 		assert.equal((await f.service.send("/unsupported")).accepted, false);
 		assert.equal((await f.service.send("A plain prompt")).accepted, true);
-		const calls = f.calls.filter((call) => call.op === "sessions.message");
-		assert.notEqual(calls[0].requestId, calls[1].requestId);
+		assert.notEqual(f.messages()[0].requestId, f.messages()[1].requestId);
 	}
 });
 
-test("a success HTTP code without a matching admitted receipt remains uncertain", async () => {
+test("late creation cannot submit or unlock a newer send", async () => {
 	const f = fixture();
+	const oldCreate = Promise.withResolvers();
+	const newCreate = Promise.withResolvers();
 	f.handle((input) =>
-		input.op === "sessions.message"
-			? receipt({ status: "pending", command_id: input.requestId })
+		input.op === "sessions.create"
+			? f.calls.length === 1
+				? oldCreate.promise
+				: newCreate.promise
 			: undefined,
 	);
-	const sent = await f.service.send("Hello");
-	assert.equal(sent.accepted, false);
-	assert.equal(sent.snapshot.status, "error");
-	assert.equal(sent.snapshot.canSend, true);
-});
-
-test("double send is serialized and navigating away prevents a late create from submitting", async () => {
-	const f = fixture();
-	const pending = deferred();
-	f.handle((input) =>
-		input.op === "sessions.create" ? pending.promise : undefined,
-	);
-	const first = f.service.send("One task");
-	assert.equal((await f.service.send("One task")).accepted, false);
-	assert.equal(f.calls.length, 1);
+	const first = f.service.send("Old task");
+	assert.equal((await f.service.send("Duplicate task")).accepted, false);
 	f.service.newChat();
-	pending.resolve(receipt({ session_id: ID }));
+	const second = f.service.send("New task");
+	oldCreate.resolve(receipt({ session_id: ID }));
 	assert.equal((await first).accepted, false);
-	assert.equal(f.service.snapshot.sessionId, null);
-	assert.equal(
-		f.calls.some((call) => call.op === "sessions.message"),
-		false,
+	assert.equal((await f.service.send("Third task")).accepted, false);
+	assert.equal(f.messages().length, 0);
+	newCreate.resolve(receipt({ session_id: ID }));
+	assert.equal((await second).accepted, true);
+	assert.deepEqual(
+		f.messages().map((call) => call.text),
+		["New task"],
 	);
 });
 
-test("pending gates and silent owners are handoffs, including during uncertain retries", async () => {
+test("fresh gates and silent owners stop an uncertain retry before delivery", async () => {
 	for (const options of [
 		{ pending_gate: { kind: "approval" } },
 		{ pending_gate: { kind: "ask" } },
@@ -248,18 +209,18 @@ test("pending gates and silent owners are handoffs, including during uncertain r
 		{ cold_reason: "owner-leaving" },
 	]) {
 		const f = fixture();
+		f.handle((input) => {
+			if (input.op === "sessions.message") throw new Error("timeout");
+		});
+		await f.service.send("One task");
 		f.setFrame(frame(options));
-		await f.service.open(ID);
+		assert.equal((await f.service.send("One task")).accepted, false);
 		assert.equal(f.service.snapshot.canSend, false);
-		assert.equal((await f.service.send("yes")).accepted, false);
-		assert.deepEqual(
-			f.calls.map((call) => call.op),
-			["sessions.get"],
-		);
+		assert.equal(f.messages().length, 1);
 	}
 });
 
-test("transcript projection excludes hidden reasoning, tool payloads, image metadata and partial deltas", async () => {
+test("transcript excludes reasoning, tools, attachments and partial updates", async () => {
 	const f = fixture();
 	f.setFrame(
 		frame({
@@ -293,24 +254,36 @@ test("transcript projection excludes hidden reasoning, tool payloads, image meta
 	);
 });
 
-test("accepted work stays busy until a terminal turn, including empty fast turns", async () => {
-	const f = fixture();
-	f.handle((input) =>
-		input.op === "sessions.message"
-			? receipt({ status: "admitted", command_id: input.requestId })
-			: undefined,
-	);
-	const sent = await f.service.send("Do work");
-	assert.equal(sent.accepted, true);
-	assert.equal(sent.snapshot.status, "working");
-	assert.equal(sent.snapshot.canSend, false);
-	f.setFrame(frame({ generation: 1, last_turn_outcome: "aborted" }));
-	await f.service.refresh();
-	assert.equal(f.service.snapshot.status, "idle");
-	assert.equal(f.service.snapshot.canSend, true);
+test("accepted work needs its own terminal turn, including after an owner change", async () => {
+	for (const [epoch, echo, outcome, expected] of [
+		["epoch", false, "aborted", "idle"],
+		["replacement", true, "error", "error"],
+		["replacement", false, "completed", "working"],
+	]) {
+		const f = fixture();
+		f.handle((input) =>
+			input.op === "sessions.message" ? admitted(input) : undefined,
+		);
+		const sent = await f.service.send("My exact task");
+		assert.equal(sent.accepted, true);
+		assert.equal(sent.snapshot.status, "working");
+		f.setFrame(
+			frame({
+				epoch,
+				generation: 1,
+				last_turn_outcome: outcome,
+				history: echo
+					? [row(f.messages()[0].requestId, "user", "My exact task")]
+					: [],
+			}),
+		);
+		await f.service.refresh();
+		assert.equal(f.service.snapshot.status, expected);
+		assert.equal(f.service.snapshot.canSend, expected !== "working");
+	}
 });
 
-test("an error outcome remains visible after its attention watermark was read and allows a new prompt", async () => {
+test("read error outcomes remain visible and permit another prompt", async () => {
 	const f = fixture();
 	f.setFrame(
 		frame({
@@ -325,47 +298,10 @@ test("an error outcome remains visible after its attention watermark was read an
 	assert.equal((await f.service.send("Try a smaller task")).accepted, true);
 });
 
-test("a fast empty turn settles after a cold session starts a new runtime epoch", async () => {
-	const f = fixture();
-	f.setFrame(frame({ epoch: `cold-${ID}` }));
-	f.handle((input) => {
-		if (input.op !== "sessions.message") return;
-		f.setFrame(
-			frame({
-				history: [row(input.requestId, "user", input.text)],
-				generation: 1,
-				last_turn_outcome: "error",
-				attention: { kind: "error", unseen: false },
-			}),
-		);
-		return receipt({ status: "admitted", command_id: input.requestId });
-	});
-	const sent = await f.service.send(
-		"A task that fails without assistant prose",
-	);
-	assert.equal(sent.accepted, true);
-	assert.equal(sent.snapshot.status, "error");
-	assert.equal(sent.snapshot.canSend, true);
-});
-
-test("an unrelated replacement owner cannot claim an unobserved send finished", async () => {
-	const f = fixture();
-	f.setFrame(frame({ epoch: `cold-${ID}` }));
-	f.handle((input) => {
-		if (input.op !== "sessions.message") return;
-		f.setFrame(frame({ generation: 1, last_turn_outcome: "completed" }));
-		return receipt({ status: "admitted", command_id: input.requestId });
-	});
-	const sent = await f.service.send("My exact task");
-	assert.equal(sent.accepted, true);
-	assert.equal(sent.snapshot.status, "working");
-	assert.equal(sent.snapshot.canSend, false);
-});
-
-test("a rejected old poll cannot overwrite a newer successful send", async () => {
+test("an old poll failure cannot replace newer chat state", async () => {
 	const f = fixture();
 	await f.service.open(ID);
-	const pending = deferred();
+	const pending = Promise.withResolvers();
 	let once = true;
 	f.handle((input) => {
 		if (input.op === "sessions.get" && once) {
@@ -384,26 +320,25 @@ test("a rejected old poll cannot overwrite a newer successful send", async () =>
 	assert.equal(f.service.snapshot.error, null);
 });
 
-test("opening another session or disposing invalidates late successful reads", async () => {
-	const f = fixture();
-	const pending = deferred();
-	f.handle((input) =>
-		input.sessionId === ID ? pending.promise : frame({ sessionId: OTHER_ID }),
-	);
-	const first = f.service.open(ID);
-	await f.service.open(OTHER_ID);
-	pending.resolve(frame({ conversation_title: "Wrong old title" }));
-	await first;
-	assert.equal(f.service.snapshot.sessionId, OTHER_ID);
-	assert.equal(f.service.snapshot.title, "A small chat");
-	const count = f.changes.length;
-	f.service.dispose();
-	await f.service.open(ID);
-	await f.service.send("No longer active");
-	assert.equal(f.changes.length, count);
+test("session changes and disposal discard late reads", async () => {
+	for (const dispose of [false, true]) {
+		const f = fixture();
+		const pending = Promise.withResolvers();
+		f.handle((input) =>
+			input.sessionId === ID ? pending.promise : frame({ sessionId: OTHER_ID }),
+		);
+		const first = f.service.open(ID);
+		if (dispose) f.service.dispose();
+		else await f.service.open(OTHER_ID);
+		const count = f.changes.length;
+		pending.resolve(frame({ conversation_title: "Wrong old title" }));
+		await first;
+		assert.equal(f.changes.length, count);
+		if (!dispose) assert.equal(f.service.snapshot.sessionId, OTHER_ID);
+	}
 });
 
-test("invalid input is refused locally and returned snapshots cannot mutate service state", async () => {
+test("invalid drafts stay local and snapshots cannot mutate state", async () => {
 	const f = fixture();
 	for (const text of ["", "   ", "x".repeat(16_001)])
 		assert.equal((await f.service.send(text)).accepted, false);

@@ -5,7 +5,6 @@ import { ArrowUp, ArrowUpRight, ChevronUp, Plus } from "lucide-react";
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type { CompanionChatSnapshot } from "../../shared/companion-chat";
 import { COMPANION_CHAT_MAX_CHARS } from "../../shared/companion-chat";
-import "./companion-chat.css";
 
 export interface CompanionChatProps {
 	snapshot: CompanionChatSnapshot;
@@ -28,11 +27,10 @@ export function CompanionChat({
 	const [sending, setSending] = useState(false);
 	const [sendError, setSendError] = useState<string | null>(null);
 	const composer = useRef<HTMLTextAreaElement>(null);
-	const sendButton = useRef<HTMLButtonElement>(null);
 	const transcript = useRef<HTMLElement>(null);
+	const sendButton = useRef<HTMLButtonElement>(null);
 	const composing = useRef(false);
 	const inFlight = useRef(false);
-	const previousReply = useRef("");
 	const hintId = useId();
 	const errorId = useId();
 	const error =
@@ -43,7 +41,6 @@ export function CompanionChat({
 	const reply = snapshot.messages
 		.filter((message) => message.role === "assistant")
 		.at(-1);
-	const replyKey = `${snapshot.sessionId ?? ""}:${reply?.id ?? ""}`;
 	const status = sending
 		? "Sending…"
 		: snapshot.status === "loading"
@@ -56,12 +53,10 @@ export function CompanionChat({
 		if (open) composer.current?.focus({ preventScroll: true });
 	}, [open]);
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: Reset only for a new answer; keep keyboard focus on the existing region.
 	useLayoutEffect(() => {
-		if (previousReply.current === replyKey) return;
-		previousReply.current = replyKey;
-		// Each new answer starts at its beginning; rerenders never move the reader.
 		if (transcript.current) transcript.current.scrollTop = 0;
-	}, [replyKey]);
+	}, [snapshot.sessionId, reply?.id]);
 
 	useLayoutEffect(() => {
 		const input = composer.current;
@@ -96,7 +91,9 @@ export function CompanionChat({
 
 	return (
 		<section
-			className={cn("companion-chat")}
+			className={cn(
+				"companion-chat flex max-h-[200px] w-[300px] max-w-full flex-none flex-col gap-1.5 overflow-hidden rounded-[14px] border border-control bg-surface p-2 text-left text-body-sm text-ink select-text",
+			)}
 			aria-label="Companion chat"
 			hidden={!open}
 			onKeyDown={(event) => {
@@ -113,21 +110,31 @@ export function CompanionChat({
 			{reply && (
 				<section
 					ref={transcript}
-					className={cn("companion-chat-transcript companion-chat-reply")}
+					className={cn(
+						"companion-chat-reply min-h-0 max-h-[120px] overflow-auto overscroll-contain px-1 py-0.5 [scrollbar-width:thin]",
+					)}
 					aria-label="Latest reply"
 					// biome-ignore lint/a11y/noNoninteractiveTabindex: The bounded reply needs keyboard focus for scrolling.
 					tabIndex={0}
 				>
-					<p aria-live="polite" aria-atomic="true">
+					<p
+						className={cn("whitespace-pre-wrap [overflow-wrap:anywhere]")}
+						aria-live="polite"
+						aria-atomic="true"
+					>
 						{reply.text}
 					</p>
 				</section>
 			)}
 
-			<div className={cn("companion-chat-compose-area")}>
+			<div className={cn("flex shrink-0 flex-col gap-1.5")}>
 				{snapshot.status === "attention" && (
-					<div className={cn("companion-chat-attention")}>
-						<output>Needs your input</output>
+					<div
+						className={cn(
+							"flex shrink-0 items-center justify-between gap-2 px-1",
+						)}
+					>
+						<output className={cn("font-medium")}>Needs your input</output>
 						<Button
 							type="button"
 							variant="secondary"
@@ -141,17 +148,26 @@ export function CompanionChat({
 					</div>
 				)}
 				{error && (
-					<p id={errorId} role="alert" className={cn("companion-chat-error")}>
+					<p
+						id={errorId}
+						role="alert"
+						className={cn(
+							"max-h-12 shrink-0 overflow-auto px-1 text-meta text-danger [overflow-wrap:anywhere]",
+						)}
+					>
 						{error}
 					</p>
 				)}
 				{status && !error && snapshot.status !== "attention" && (
-					<output className={cn("companion-chat-status")} aria-live="polite">
+					<output
+						className={cn("shrink-0 px-1 text-meta text-ink-muted")}
+						aria-live="polite"
+					>
 						{status}
 					</output>
 				)}
 				<form
-					className={cn("companion-chat-composer")}
+					className={cn("flex shrink-0 items-end gap-1")}
 					onSubmit={(event) => {
 						event.preventDefault();
 						void submit();
@@ -159,7 +175,9 @@ export function CompanionChat({
 				>
 					<Textarea
 						ref={composer}
-						className={cn("companion-chat-input")}
+						className={cn(
+							"min-h-8 max-h-16 min-w-0 flex-1 resize-none border-0 px-1 py-1.5 text-body leading-5",
+						)}
 						rows={1}
 						maxLength={COMPANION_CHAT_MAX_CHARS}
 						readOnly={sending}
@@ -189,14 +207,14 @@ export function CompanionChat({
 							}
 						}}
 					/>
-					<div className={cn("companion-chat-actions")}>
+					<div className={cn("flex min-h-8 shrink-0 items-center gap-0.5")}>
 						{snapshot.sessionId && (
 							<>
 								<Button
 									type="button"
 									variant="ghost"
 									size="icon-sm"
-									className={cn("companion-chat-button")}
+									className={cn("h-7 w-6")}
 									aria-label="New chat"
 									title="New chat"
 									disabled={busy}
@@ -212,10 +230,9 @@ export function CompanionChat({
 									type="button"
 									variant="ghost"
 									size="icon-sm"
-									className={cn("companion-chat-button")}
+									className={cn("h-7 w-6")}
 									aria-label="Open chat in the full app"
 									title="Open in the full app"
-									disabled={!snapshot.sessionId}
 									onClick={onExpand}
 								>
 									<ArrowUpRight size={14} aria-hidden="true" />
@@ -227,7 +244,7 @@ export function CompanionChat({
 							type="submit"
 							size="icon"
 							variant="primary"
-							className={cn("companion-chat-send")}
+							className={cn("size-7")}
 							aria-label="Send message"
 							title="Send message"
 							disabled={!canSend || !draft.trim()}
@@ -238,7 +255,7 @@ export function CompanionChat({
 							type="button"
 							variant="ghost"
 							size="icon-sm"
-							className={cn("companion-chat-button")}
+							className={cn("h-7 w-6")}
 							aria-label="Collapse chat"
 							title="Collapse chat"
 							onClick={onCollapse}
@@ -247,11 +264,11 @@ export function CompanionChat({
 						</Button>
 					</div>
 				</form>
-				<span id={hintId} className={cn("companion-chat-sr-only")}>
+				<span id={hintId} className={cn("sr-only")}>
 					Enter to send. Shift+Enter for a new line.
 				</span>
 				{draft.length >= COMPANION_CHAT_MAX_CHARS - 1000 && (
-					<output className={cn("companion-chat-count")}>
+					<output className={cn("shrink-0 px-1 text-meta text-ink-muted")}>
 						{draft.length.toLocaleString()} /{" "}
 						{COMPANION_CHAT_MAX_CHARS.toLocaleString()}
 					</output>

@@ -1,19 +1,19 @@
 import { readFileSync, renameSync, writeFileSync } from "node:fs";
 import { BrowserWindow, Menu, ipcMain, screen } from "electron";
 import type { IpcMainEvent, IpcMainInvokeEvent } from "electron";
-import { BUILTIN_COMPANIONS } from "../shared/companion-skin";
-import type { CompanionAppearance } from "../shared/companion-skin";
+import {
+	BUILTIN_COMPANIONS,
+	type CompanionAppearance,
+} from "../shared/companion-skin";
 import {
 	COMPANION_CHAT_SIZE,
 	COMPANION_OFFLINE,
 	COMPANION_SIZE,
+	type CompanionPreferences,
+	type CompanionState,
 	clampCompanionPosition,
 	companionPreferences,
 	companionStateFromCatalogue,
-} from "../shared/desktop-companion";
-import type {
-	CompanionPreferences,
-	CompanionState,
 } from "../shared/desktop-companion";
 import { CompanionChatService } from "./companion-chat";
 import { CompanionSkinLibrary } from "./companion-skins";
@@ -34,7 +34,6 @@ interface CompanionOptions {
 	report(message: string): void;
 }
 
-/** A separate, narrowly privileged window with a text-only desktop chat client. */
 export class DesktopCompanion {
 	private window: BrowserWindow | null = null;
 	private chat: CompanionChatService;
@@ -100,13 +99,7 @@ export class DesktopCompanion {
 		return this.skins.list();
 	}
 	get appearance(): CompanionAppearance {
-		return (
-			BUILTIN_COMPANIONS.find(
-				(item) => item.id === this.preferences.character,
-			) ??
-			this.skins.get(this.preferences.character) ??
-			BUILTIN_COMPANIONS[0]
-		);
+		return this.skins.get(this.preferences.character) ?? BUILTIN_COMPANIONS[0];
 	}
 
 	selectCharacter(id: string): void {
@@ -141,11 +134,7 @@ export class DesktopCompanion {
 		this.save();
 		this.options.visibilityChanged(enabled);
 		if (!enabled) {
-			this.generation++;
-			if (this.poll) clearInterval(this.poll);
-			if (this.debounce) clearTimeout(this.debounce);
-			this.poll = null;
-			this.debounce = null;
+			this.stopPolling();
 			this.dragOrigin = null;
 			this.layoutChat(false);
 			this.chatOpen = false;
@@ -154,14 +143,15 @@ export class DesktopCompanion {
 		}
 		if (this.window && !this.window.isDestroyed()) {
 			if (wasEnabled) return;
-			presentWindow(this.window, this.options.headless ? "never" : "inactive", {
-				trigger: "companion-present",
-				report: this.options.report,
-			});
-			this.poll = setInterval(() => this.refresh(), 5000);
-			this.refresh();
-			return;
+			this.present();
+		} else {
+			this.createWindow();
 		}
+		this.poll = setInterval(() => this.refresh(), 5000);
+		this.refresh();
+	}
+
+	private createWindow(): void {
 		const area = screen.getPrimaryDisplay().workArea;
 		const point = this.preferences.position ?? {
 			x: area.x + area.width - COMPANION_SIZE.width - 24,
@@ -174,9 +164,7 @@ export class DesktopCompanion {
 			title: "Local Operator companion",
 			show: false,
 			acceptFirstMouse: true,
-			// A macOS panel skips application activation on show/focus, so the
-			// composer can look focused while keystrokes go to another app. Use a
-			// normal window; showInactive keeps its initial presentation passive.
+			// Use a normal window: macOS panels skip show/focus activation.
 			focusable: !this.options.headless,
 			frame: false,
 			transparent: true,
@@ -211,17 +199,9 @@ export class DesktopCompanion {
 			event.preventDefault(),
 		);
 		window.once("ready-to-show", () => {
-			if (!this.enabled || this.window !== window) return;
-			presentWindow(window, this.options.headless ? "never" : "inactive", {
-				trigger: "companion-present",
-				report: this.options.report,
-			});
+			if (this.enabled && this.window === window) this.present();
 		});
-		window.on("blur", () => {
-			const dragging = this.dragOrigin !== null;
-			this.dragOrigin = null;
-			if (dragging && this.chatOpen) this.layoutChat(true);
-		});
+		window.on("blur", () => this.finishDrag());
 		window.on("closed", () => {
 			if (this.window === window) {
 				this.window = null;
@@ -231,11 +211,25 @@ export class DesktopCompanion {
 		void window
 			.loadURL(this.options.url)
 			.catch(() => this.options.report("Companion document could not load"));
-		this.poll = setInterval(() => this.refresh(), 5000);
-		this.refresh();
 	}
 
-	/** Debounce fleet events and serialize reads so an old response cannot win. */
+	private present(): void {
+		if (!this.window) return;
+		presentWindow(this.window, this.options.headless ? "never" : "inactive", {
+			trigger: "companion-present",
+			report: this.options.report,
+		});
+	}
+
+	private stopPolling(): void {
+		this.generation++;
+		if (this.poll) clearInterval(this.poll);
+		if (this.debounce) clearTimeout(this.debounce);
+		this.poll = null;
+		this.debounce = null;
+	}
+
+	/** Coalesce feed events while keeping catalogue reads sequential. */
 	refresh(): void {
 		if (!this.enabled || this.disposed || this.debounce) return;
 		if (this.refreshing) {
@@ -340,14 +334,19 @@ export class DesktopCompanion {
 	}
 
 	private onDisplayChanged(): void {
-		if (!this.window) return;
 		this.layoutChat(this.chatOpen);
 	}
 
-	private showMenu(): void {
-		const dragging = this.dragOrigin !== null;
+	private finishDrag(openChat = false): void {
+		const drag = this.dragOrigin;
 		this.dragOrigin = null;
-		if (dragging && this.chatOpen) this.layoutChat(true);
+		if (!drag) return;
+		if (openChat && !drag.moved) this.showChat();
+		else if (this.chatOpen) this.layoutChat(true);
+	}
+
+	private showMenu(): void {
+		this.finishDrag();
 		if (!this.window || this.options.headless) return;
 		Menu.buildFromTemplate([
 			{ label: "Chat", click: () => this.showChat() },
@@ -425,13 +424,8 @@ export class DesktopCompanion {
 						y: this.dragOrigin.position.y + dy,
 					});
 			} else if (value === "end" || value === "cancel") {
-				const dragging = this.dragOrigin !== null;
-				const clicked =
-					value === "end" && this.dragOrigin && !this.dragOrigin.moved;
-				this.dragOrigin = null;
 				this.save();
-				if (clicked) this.showChat();
-				else if (dragging && this.chatOpen) this.layoutChat(true);
+				this.finishDrag(value === "end");
 			}
 		} else if (action === "nudge" && typeof value === "string") {
 			const offsets: Record<string, [number, number]> = {
@@ -442,7 +436,6 @@ export class DesktopCompanion {
 			};
 			if (!Object.prototype.hasOwnProperty.call(offsets, value)) return;
 			const offset = offsets[value];
-			if (!offset) return;
 			const [x, y] = this.window.getPosition();
 			this.move({ x: x + offset[0], y: y + offset[1] });
 			this.save();
@@ -451,15 +444,11 @@ export class DesktopCompanion {
 
 	private save(): void {
 		try {
-			writeFileSync(
-				`${this.options.preferencesPath}.tmp`,
-				JSON.stringify(this.preferences),
-				{ mode: 0o600 },
-			);
-			renameSync(
-				`${this.options.preferencesPath}.tmp`,
-				this.options.preferencesPath,
-			);
+			const path = this.options.preferencesPath;
+			writeFileSync(`${path}.tmp`, JSON.stringify(this.preferences), {
+				mode: 0o600,
+			});
+			renameSync(`${path}.tmp`, path);
 		} catch {
 			this.options.report("Companion preferences could not be saved");
 		}
@@ -468,9 +457,7 @@ export class DesktopCompanion {
 	dispose(): void {
 		this.disposed = true;
 		this.chat.dispose();
-		this.generation++;
-		if (this.poll) clearInterval(this.poll);
-		if (this.debounce) clearTimeout(this.debounce);
+		this.stopPolling();
 		ipcMain.removeHandler("companion:get-state");
 		ipcMain.removeHandler("companion:get-appearance");
 		ipcMain.removeHandler("companion:get-chat");

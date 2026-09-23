@@ -7,10 +7,9 @@ import { COMPANION_OFFLINE } from "../../shared/desktop-companion";
 import type {
 	CompanionBridge,
 	CompanionChatView,
-	CompanionState,
 } from "../../shared/desktop-companion";
 import "./assets/fonts/fonts.css";
-import "./styles/themes.generated.css";
+import "./styles/index.css";
 import "./companion.css";
 import type { CompanionAppearance } from "../../shared/companion-skin";
 import { CompanionArt } from "./companion-art";
@@ -38,24 +37,59 @@ function syncTheme(): void {
 syncTheme();
 window.addEventListener("storage", syncTheme);
 
+function useCompanionValue<T>(
+	initial: T,
+	read: () => Promise<T>,
+	subscribe: (listener: (value: T) => void) => () => void,
+) {
+	const [value, setValue] = useState(initial);
+	useEffect(() => {
+		let received = false;
+		const unsubscribe = subscribe((next) => {
+			received = true;
+			setValue(next);
+		});
+		void read().then((next) => {
+			if (!received && next) setValue(next);
+		});
+		return () => {
+			received = true;
+			unsubscribe();
+		};
+	}, [read, subscribe]);
+	return value;
+}
+
 function Companion() {
-	const [state, setState] = useState<CompanionState>(COMPANION_OFFLINE);
-	const [appearance, setAppearance] = useState<CompanionAppearance>({
-		id: "sprout",
-		name: "Sprout",
-	});
-	const interaction = useCompanionInteraction();
-	const [chat, setChat] = useState<CompanionChatView>({
-		open: false,
-		snapshot: {
-			sessionId: null,
-			title: "Companion chat",
-			messages: [],
-			status: "idle",
-			error: null,
-			canSend: true,
+	const state = useCompanionValue(
+		COMPANION_OFFLINE,
+		window.companion.getState,
+		window.companion.onState,
+	);
+	const appearance = useCompanionValue<CompanionAppearance>(
+		{
+			id: "sprout",
+			name: "Sprout",
 		},
-	});
+		window.companion.getAppearance,
+		window.companion.onAppearance,
+	);
+	const interaction = useCompanionInteraction();
+	const chat = useCompanionValue<CompanionChatView>(
+		{
+			open: false,
+			snapshot: {
+				sessionId: null,
+				title: "Companion chat",
+				messages: [],
+				status: "idle",
+				error: null,
+				canSend: true,
+			},
+		},
+		window.companion.getChat,
+		window.companion.onChat,
+	);
 	const wasChatOpen = useRef(false);
 	useEffect(() => {
 		if (wasChatOpen.current && !chat.open)
@@ -65,31 +99,6 @@ function Companion() {
 		wasChatOpen.current = chat.open;
 	}, [chat.open]);
 	useEffect(() => {
-		let received = false;
-		let appearanceReceived = false;
-		let chatReceived = false;
-		let mounted = true;
-		const unsubscribe = window.companion.onState((next) => {
-			received = true;
-			setState(next);
-		});
-		void window.companion.getState().then((next) => {
-			if (mounted && !received && next) setState(next);
-		});
-		const unwatchAppearance = window.companion.onAppearance((next) => {
-			appearanceReceived = true;
-			setAppearance(next);
-		});
-		void window.companion.getAppearance().then((next) => {
-			if (mounted && !appearanceReceived && next) setAppearance(next);
-		});
-		const unwatchChat = window.companion.onChat((next) => {
-			chatReceived = true;
-			setChat(next);
-		});
-		void window.companion.getChat().then((next) => {
-			if (mounted && !chatReceived && next) setChat(next);
-		});
 		const hover = (event: PointerEvent) => {
 			window.companion.setInteractive(
 				event.target instanceof Element &&
@@ -100,10 +109,6 @@ function Companion() {
 		document.addEventListener("pointermove", hover);
 		document.addEventListener("pointerleave", leave);
 		return () => {
-			mounted = false;
-			unsubscribe();
-			unwatchAppearance();
-			unwatchChat();
 			document.removeEventListener("pointermove", hover);
 			document.removeEventListener("pointerleave", leave);
 		};
@@ -135,10 +140,7 @@ function Companion() {
 	}, [chat.open]);
 
 	return (
-		<main
-			className={cn("companion", chat.open && "companion--chat")}
-			data-mood={state.mood}
-		>
+		<main className={cn("companion")} data-mood={state.mood}>
 			<button
 				type="button"
 				className={cn("companion-character")}
@@ -222,7 +224,6 @@ function Companion() {
 								: "sprout"
 						}
 						mood={state.mood}
-						engaged={interaction.reaction !== "rest"}
 						gaze={interaction.gaze}
 						reaction={interaction.reaction}
 					/>

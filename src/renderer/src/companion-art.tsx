@@ -18,9 +18,8 @@ const artwork: Record<BuiltinCompanionCharacter, string> = {
 interface CompanionArtProps {
 	character: BuiltinCompanionCharacter;
 	mood: CompanionMood;
-	engaged?: boolean;
-	gaze?: { x: number; y: number };
-	reaction?: CompanionReaction;
+	gaze: { x: number; y: number };
+	reaction: CompanionReaction;
 }
 
 interface ExpressionProps {
@@ -29,36 +28,32 @@ interface ExpressionProps {
 	reaction: CompanionReaction;
 }
 
+const eyePaths = {
+	offline: ["M19 30q8 8 16 0m30 0q8 8 16 0", "M19 30v4h16v-4M65 30v4h16v-4"],
+	complete: [
+		"M17 32q10-20 20 0m26 0q10-20 20 0",
+		"M17 32v-8h5v-5h10v5h5v8m26 0v-8h5v-5h10v5h5v8",
+	],
+	pressed: [
+		"M18 32q9-12 18 0m28 0q9-12 18 0",
+		"M18 32v-5h5v-4h8v4h5v5m28 0v-5h5v-4h8v4h5v5",
+	],
+};
+const eyeRects = {
+	working: { x: 18, y: 26, width: 18, height: 10, rx: 4 },
+	attention: { x: 19, y: 17, width: 16, height: 24, rx: 8 },
+	curious: { x: 18, y: 12, width: 18, height: 29, rx: 8 },
+	idle: { x: 19, y: 16, width: 16, height: 25, rx: 8 },
+};
+
 function Eyes({ mood, pixels, reaction }: ExpressionProps) {
-	if (mood === "offline") {
-		return (
-			<path
-				d={
-					pixels
-						? "M19 30v4h16v-4M65 30v4h16v-4"
-						: "M19 30q8 8 16 0m30 0q8 8 16 0"
-				}
-			/>
-		);
-	}
-	if (mood === "complete") {
-		return (
-			<path
-				d={
-					pixels
-						? "M17 32v-8h5v-5h10v5h5v8m26 0v-8h5v-5h10v5h5v8"
-						: "M17 32q10-20 20 0m26 0q10-20 20 0"
-				}
-			/>
-		);
-	}
-	if (mood === "attention") {
-		return (
-			<>
-				<rect x="19" y="17" width="16" height="24" rx={pixels ? 0 : 8} />
-				<rect x="65" y="17" width="16" height="24" rx={pixels ? 0 : 8} />
-			</>
-		);
+	const expression = mood === "idle" ? reaction : mood;
+	if (
+		expression === "offline" ||
+		expression === "complete" ||
+		expression === "pressed"
+	) {
+		return <path d={eyePaths[expression][pixels ? 1 : 0]} />;
 	}
 	if (mood === "error") {
 		return (
@@ -73,60 +68,23 @@ function Eyes({ mood, pixels, reaction }: ExpressionProps) {
 			</>
 		);
 	}
-	if (mood === "working") {
-		return (
-			<>
-				<rect
-					className={cn("companion-art-eye-fill")}
-					x="18"
-					y="26"
-					width="18"
-					height="10"
-					rx={pixels ? 0 : 4}
-				/>
-				<rect
-					className={cn("companion-art-eye-fill")}
-					x="64"
-					y="26"
-					width="18"
-					height="10"
-					rx={pixels ? 0 : 4}
-				/>
-			</>
-		);
-	}
-	if (reaction === "pressed") {
-		return (
-			<path
-				d={
-					pixels
-						? "M18 32v-5h5v-4h8v4h5v5m28 0v-5h5v-4h8v4h5v5"
-						: "M18 32q9-12 18 0m28 0q9-12 18 0"
-				}
-			/>
-		);
-	}
-	const curious = reaction !== "rest";
-	return (
-		<>
-			<rect
-				className={cn("companion-art-eye-fill")}
-				x={curious ? 18 : 19}
-				y={curious ? 12 : 16}
-				width={curious ? 18 : 16}
-				height={curious ? 29 : 25}
-				rx={pixels ? 0 : 8}
-			/>
-			<rect
-				className={cn("companion-art-eye-fill")}
-				x={curious ? 64 : 65}
-				y={curious ? 12 : 16}
-				width={curious ? 18 : 16}
-				height={curious ? 29 : 25}
-				rx={pixels ? 0 : 8}
-			/>
-		</>
-	);
+	const shape =
+		eyeRects[
+			mood === "working" || mood === "attention"
+				? mood
+				: reaction === "rest"
+					? "idle"
+					: "curious"
+		];
+	return [0, 46].map((offset) => (
+		<rect
+			key={offset}
+			{...shape}
+			x={shape.x + offset}
+			rx={pixels ? 0 : shape.rx}
+			className={cn(mood !== "attention" && "companion-art-eye-fill")}
+		/>
+	));
 }
 
 function Mouth({ mood, pixels, reaction }: ExpressionProps) {
@@ -167,24 +125,16 @@ function Mouth({ mood, pixels, reaction }: ExpressionProps) {
 	return <path d={pixels ? "M38 49v7h6v4h12v-4h6v-7" : "M38 49q12 18 24 0"} />;
 }
 
-function gazeAxis(value: unknown): number {
-	return typeof value === "number" && Number.isFinite(value)
-		? Math.max(-1, Math.min(1, value))
-		: 0;
-}
-
-/** Decorative artwork only. The enclosing control owns its label and hit area. */
 export function CompanionArt({
 	character,
 	mood,
-	engaged = false,
 	gaze,
-	reaction = engaged ? "curious" : "rest",
+	reaction,
 }: CompanionArtProps) {
 	const pixels = character === "pixel";
 	const interacting = reaction !== "rest";
-	const x = interacting ? gazeAxis(gaze?.x) : 0;
-	const y = interacting ? gazeAxis(gaze?.y) : 0;
+	const x = interacting ? gaze.x : 0;
+	const y = interacting ? gaze.y : 0;
 	const tracking = {
 		"--companion-art-gaze-x": `${x * 7}px`,
 		"--companion-art-gaze-y": `${y * 4}px`,
@@ -193,11 +143,7 @@ export function CompanionArt({
 	return (
 		<span
 			aria-hidden="true"
-			className={cn(
-				"companion-art",
-				`companion-art-${character}`,
-				engaged && "companion-art-engaged",
-			)}
+			className={cn("companion-art", `companion-art-${character}`)}
 			data-mood={mood}
 			data-reaction={reaction}
 			style={tracking}

@@ -1,7 +1,3 @@
-/* Original illustration pigments are intrinsic to the character, not UI roles.
- * The enclosing controls and status text continue to use the selected theme.
- * Ambient character motion is the scoped exception documented in
- * docs/companion-artwork.md. The hit area never moves with the artwork. */
 .companion-art {
 	--companion-art-light: #c8fbd7;
 	display: block;
@@ -181,8 +177,7 @@
 		opacity: 1;
 	}
 
-	.companion-art-gaze,
-	.companion-art-engaged .companion-art-gaze {
+	.companion-art-gaze {
 		transition: none;
 		transform: none;
 	}

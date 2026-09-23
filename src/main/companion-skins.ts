@@ -21,7 +21,7 @@ import {
 	resolve,
 	sep,
 } from "node:path";
-import { inflateSync } from "node:zlib";
+import { crc32, inflateSync } from "node:zlib";
 import {
 	BUILTIN_COMPANIONS,
 	type CompanionAppearance,
@@ -45,14 +45,8 @@ const PNG_PREFIX = "data:image/png;base64,";
 const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
 const SAVED_NAME = /^custom-[a-f0-9]{32}\.json$/;
 const PNG_EXTENSION = /\.png$/i;
-const NAME_SEPARATORS = /[\s_-]+/g;
-const CRC_TABLE = Array.from({ length: 256 }, (_, index) => {
-	let crc = index;
-	for (let bit = 0; bit < 8; bit++) {
-		crc = crc & 1 ? 0xedb88320 ^ (crc >>> 1) : crc >>> 1;
-	}
-	return crc >>> 0;
-});
+const CONTROL_CHARACTERS = /\p{Cc}/u;
+const NAME_SEPARATORS = /[\p{Cc}\s_-]+/gu;
 
 interface StoredPack {
 	version: 1;
@@ -105,13 +99,6 @@ function readBounded(path: string, limit: number): Buffer {
 	}
 }
 
-function crc32(bytes: Buffer): number {
-	let crc = 0xffffffff;
-	for (const byte of bytes) crc = CRC_TABLE[(crc ^ byte) & 255] ^ (crc >>> 8);
-	return (crc ^ 0xffffffff) >>> 0;
-}
-
-/** Validate dimensions, chunk integrity and bounded scanlines before Chromium sees an image. */
 function validatePng(bytes: Buffer): void {
 	const invalid = () => new Error("Each pose must be a valid PNG image.");
 	if (
@@ -121,11 +108,35 @@ function validatePng(bytes: Buffer): void {
 	) {
 		throw invalid();
 	}
-	let width = 0;
-	let height = 0;
-	let depth = 0;
-	let channels = 0;
-	let interlaced = false;
+	if (
+		bytes.readUInt32BE(8) !== 13 ||
+		bytes.toString("ascii", 12, 16) !== "IHDR"
+	)
+		throw invalid();
+	const width = bytes.readUInt32BE(16);
+	const height = bytes.readUInt32BE(20);
+	const depth = bytes[24];
+	const color = bytes[25];
+	const formats: Record<number, { depths: number[]; channels: number }> = {
+		0: { depths: [1, 2, 4, 8, 16], channels: 1 },
+		2: { depths: [8, 16], channels: 3 },
+		3: { depths: [1, 2, 4, 8], channels: 1 },
+		4: { depths: [8, 16], channels: 2 },
+		6: { depths: [8, 16], channels: 4 },
+	};
+	if (
+		!formats[color]?.depths.includes(depth) ||
+		bytes[26] ||
+		bytes[27] ||
+		bytes[28] > 1
+	)
+		throw invalid();
+	if (!width || !height || width > MAX_EDGE || height > MAX_EDGE)
+		throw new Error(
+			"PNG poses must be between 1 and 2048 pixels on each side.",
+		);
+	const { channels } = formats[color];
+	const interlaced = bytes[28] === 1;
 	let ended = false;
 	const compressed: Buffer[] = [];
 	for (let offset = 8; offset < bytes.length; ) {
@@ -140,38 +151,8 @@ function validatePng(bytes: Buffer): void {
 		) {
 			throw invalid();
 		}
-		if (offset === 8 && type !== "IHDR") throw invalid();
-		if (type === "IHDR") {
-			if (offset !== 8 || length !== 13) throw invalid();
-			width = payload.readUInt32BE(0);
-			height = payload.readUInt32BE(4);
-			depth = payload[8];
-			const color = payload[9];
-			const allowed: Record<number, readonly number[]> = {
-				0: [1, 2, 4, 8, 16],
-				2: [8, 16],
-				3: [1, 2, 4, 8],
-				4: [8, 16],
-				6: [8, 16],
-			};
-			if (
-				!allowed[color]?.includes(depth) ||
-				payload[10] ||
-				payload[11] ||
-				payload[12] > 1
-			) {
-				throw invalid();
-			}
-			if (!width || !height || width > MAX_EDGE || height > MAX_EDGE) {
-				throw new Error(
-					"PNG poses must be between 1 and 2048 pixels on each side.",
-				);
-			}
-			channels = ({ 0: 1, 2: 3, 3: 1, 4: 2, 6: 4 } as Record<number, number>)[
-				color
-			];
-			interlaced = payload[12] === 1;
-		} else if (type === "IDAT") {
+		if (type === "IHDR" && offset !== 8) throw invalid();
+		if (type === "IDAT") {
 			compressed.push(payload);
 		} else if (type === "IEND") {
 			if (length || end !== bytes.length || !compressed.length) throw invalid();
@@ -235,11 +216,7 @@ function normalizePack(
 		typeof pack.name !== "string" ||
 		!pack.name.trim() ||
 		pack.name.trim().length > 64 ||
-		Array.from(pack.name).some(
-			(char) =>
-				char.charCodeAt(0) < 32 ||
-				(char.charCodeAt(0) >= 127 && char.charCodeAt(0) < 160),
-		)
+		CONTROL_CHARACTERS.test(pack.name)
 	) {
 		throw new Error(
 			"Give the companion a name of 1 to 64 characters without control characters.",
@@ -287,21 +264,6 @@ function appearance(id: string, pack: StoredPack): CompanionAppearance {
 	};
 }
 
-function nameFromPng(path: string): string {
-	const name = Array.from(basename(path).slice(0, -4))
-		.map((char) => {
-			const code = char.charCodeAt(0);
-			return code < 32 || (code >= 127 && code < 160) ? " " : char;
-		})
-		.join("")
-		.replace(NAME_SEPARATORS, " ")
-		.trim()
-		.slice(0, 64)
-		.trim();
-	return name || "My companion";
-}
-
-/** Imports contain only copied image data. No pack can add code or access the backend. */
 export class CompanionSkinLibrary {
 	private readonly packs = new Map<string, StoredPack>();
 
@@ -324,15 +286,15 @@ export class CompanionSkinLibrary {
 					),
 					(source) => {
 						if (
-							!source.startsWith(PNG_PREFIX) ||
 							source.length >
-								PNG_PREFIX.length + 4 * Math.ceil(MAX_IMAGE_BYTES / 3)
-						) {
+							PNG_PREFIX.length + 4 * Math.ceil(MAX_IMAGE_BYTES / 3)
+						)
 							throw new Error("Invalid saved PNG pose.");
-						}
-						const encoded = source.slice(PNG_PREFIX.length);
-						const bytes = Buffer.from(encoded, "base64");
-						if (bytes.toString("base64") !== encoded)
+						const bytes = Buffer.from(
+							source.slice(PNG_PREFIX.length),
+							"base64",
+						);
+						if (source !== PNG_PREFIX + bytes.toString("base64"))
 							throw new Error("Invalid saved PNG pose.");
 						return bytes;
 					},
@@ -369,40 +331,41 @@ export class CompanionSkinLibrary {
 			const manifest = realpathSync(manifestPath);
 			if (!inside(root, manifest))
 				throw new Error("The manifest must be inside its chosen folder.");
-			if (PNG_EXTENSION.test(manifestPath)) {
-				pack = normalizePack(
-					{
+			const singleImage = PNG_EXTENSION.test(manifestPath);
+			const input = singleImage
+				? {
 						version: 1,
-						name: nameFromPng(manifestPath),
+						name:
+							basename(manifestPath)
+								.slice(0, -4)
+								.replace(NAME_SEPARATORS, " ")
+								.trim()
+								.slice(0, 64)
+								.trim() || "My companion",
 						frames: { idle: "idle.png" },
-					},
-					() => readBounded(manifest, MAX_IMAGE_BYTES),
-				);
-			} else {
-				pack = normalizePack(
-					JSON.parse(
+					}
+				: JSON.parse(
 						readBounded(manifest, MAX_MANIFEST_BYTES).toString("utf8"),
-					),
-					(source) => {
-						if (
-							!source ||
-							isAbsolute(source) ||
-							source.includes(":") ||
-							source.includes("\\") ||
-							source.split("/").includes("..") ||
-							!PNG_EXTENSION.test(source)
-						) {
-							throw new Error(
-								"Pose paths must be relative PNG filenames inside the pack folder.",
-							);
-						}
-						const path = realpathSync(resolve(root, source));
-						if (!inside(root, path))
-							throw new Error("A pose points outside the pack folder.");
-						return readBounded(path, MAX_IMAGE_BYTES);
-					},
-				);
-			}
+					);
+			pack = normalizePack(input, (source) => {
+				if (singleImage) return readBounded(manifest, MAX_IMAGE_BYTES);
+				if (
+					!source ||
+					isAbsolute(source) ||
+					source.includes(":") ||
+					source.includes("\\") ||
+					source.split("/").includes("..") ||
+					!PNG_EXTENSION.test(source)
+				) {
+					throw new Error(
+						"Pose paths must be relative PNG filenames inside the pack folder.",
+					);
+				}
+				const path = realpathSync(resolve(root, source));
+				if (!inside(root, path))
+					throw new Error("A pose points outside the pack folder.");
+				return readBounded(path, MAX_IMAGE_BYTES);
+			});
 		} catch (error) {
 			if (error instanceof SyntaxError)
 				throw new Error("The companion manifest is not valid JSON.");
