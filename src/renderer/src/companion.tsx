@@ -9,6 +9,7 @@ import { COMPANION_OFFLINE } from "../../shared/desktop-companion";
 import type {
 	CompanionBridge,
 	CompanionChatView,
+	CompanionMotion,
 } from "../../shared/desktop-companion";
 import "./assets/fonts/fonts.css";
 import "./styles/index.css";
@@ -77,6 +78,21 @@ function Companion() {
 		window.companion.onAppearance,
 	);
 	const interaction = useCompanionInteraction(state.mood);
+	const [motion, setMotion] = useState<CompanionMotion>("rest");
+	const reaction = motion === "rest" ? interaction.reaction : motion;
+	useEffect(() => {
+		const unsubscribe = window.companion.onMotion(setMotion);
+		const preference = window.matchMedia("(prefers-reduced-motion: reduce)");
+		const sync = () => window.companion.setReducedMotion(preference.matches);
+		preference.addEventListener("change", sync);
+		document.addEventListener("visibilitychange", sync);
+		sync();
+		return () => {
+			unsubscribe();
+			preference.removeEventListener("change", sync);
+			document.removeEventListener("visibilitychange", sync);
+		};
+	}, []);
 	const lastGesture = useRef<"tap" | "drag" | null>(null);
 	const firstClickWasTap = useRef(false);
 	const chat = useCompanionValue<CompanionChatView>(
@@ -150,7 +166,7 @@ function Companion() {
 					type="button"
 					className={cn("companion-character")}
 					{...interaction.handlers}
-					data-reaction={interaction.reaction}
+					data-reaction={reaction}
 					aria-label={`${appearance.name}. ${state.label}. Click to pet. Double-click to chat. Drag or use arrow keys to move. Right-click for options.`}
 					title={`${state.label} · Click to pet · Double-click to chat`}
 					onContextMenu={(event) => {
@@ -178,6 +194,7 @@ function Companion() {
 					}}
 					onPointerUp={(event) => {
 						lastGesture.current = interaction.handlers.onPointerUp(event);
+						if (lastGesture.current === null) return;
 						if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
 						window.companion.drag("end");
 						event.currentTarget.releasePointerCapture(event.pointerId);
@@ -244,7 +261,7 @@ function Companion() {
 							}
 							mood={state.mood}
 							gaze={interaction.gaze}
-							reaction={interaction.reaction}
+							reaction={reaction}
 						/>
 					)}
 				</button>

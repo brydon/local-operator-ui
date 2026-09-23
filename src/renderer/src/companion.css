@@ -85,8 +85,27 @@ body {
 .companion-character[data-reaction="pressed"] .companion-custom-art {
 	transform: scaleY(0.96);
 }
+.companion-character[data-reaction="grabbed"] .companion-custom-art,
 .companion-character[data-reaction="dragging"] .companion-custom-art {
 	transform: rotate(-4deg);
+}
+.companion-character[data-reaction="struggling"] .companion-custom-art {
+	animation: companion-custom-wriggle 360ms ease-in-out infinite;
+}
+.companion-character[data-reaction="falling"] .companion-custom-art {
+	transform: scale(0.94, 1.06);
+}
+.companion-character[data-reaction="landing"] .companion-custom-art {
+	animation: companion-art-land 520ms ease-out;
+}
+@keyframes companion-custom-wriggle {
+	0%,
+	100% {
+		transform: rotate(-4deg);
+	}
+	50% {
+		transform: rotate(4deg);
+	}
 }
 @media (prefers-reduced-motion: reduce) {
 	.companion-chat:not([hidden]) {
@@ -96,6 +115,7 @@ body {
 		transition: none;
 	}
 	.companion-character[data-reaction] .companion-custom-art {
+		animation: none;
 		transition: none;
 		transform: none;
 	}

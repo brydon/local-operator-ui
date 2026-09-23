@@ -10,7 +10,9 @@ export function useCompanionInteraction(mood: CompanionMood = "idle") {
 	const [hovered, setHovered] = useState(false);
 	const [focused, setFocused] = useState(false);
 	const [pressed, setPressed] = useState(false);
-	const [dragging, setDragging] = useState(false);
+	const [dragging, setDragging] = useState<
+		"grabbed" | "dragging" | "struggling" | null
+	>(null);
 	const [dozing, setDozing] = useState(false);
 	const [delight, setDelight] = useState<"happy" | "landing" | null>(null);
 	const [gaze, setGaze] = useState({ x: 0, y: 0 });
@@ -79,7 +81,7 @@ export function useCompanionInteraction(mood: CompanionMood = "idle") {
 	const reset = useCallback(() => {
 		cleanup();
 		setPressed(false);
-		setDragging(false);
+		setDragging(null);
 		setDelight(null);
 		setDozing(false);
 		setHovered(false);
@@ -97,7 +99,7 @@ export function useCompanionInteraction(mood: CompanionMood = "idle") {
 		const time = event.timeStamp;
 		if (
 			origin.current ||
-			currentMood.current !== "idle" ||
+			(currentMood.current !== "idle" && currentMood.current !== "complete") ||
 			event.pointerType === "touch" ||
 			event.clientY > bounds.top + bounds.height * 0.6
 		) {
@@ -163,22 +165,22 @@ export function useCompanionInteraction(mood: CompanionMood = "idle") {
 		};
 	}, [blur, cleanup, reset, wake]);
 
-	const reaction: CompanionReaction = dragging
-		? "dragging"
-		: (delight ??
-			(pressed
-				? "pressed"
-				: dozing && mood === "idle"
-					? "dozing"
-					: hovered || focused
-						? "curious"
-						: "rest"));
+	const reaction: CompanionReaction =
+		dragging ??
+		delight ??
+		(pressed
+			? "pressed"
+			: dozing && mood === "idle"
+				? "dozing"
+				: hovered || focused
+					? "curious"
+					: "rest");
 	return {
 		reaction,
 		gaze,
 		tap,
 		reset,
-		isEngaged: hovered || focused || pressed || dragging,
+		isEngaged: hovered || focused || pressed || dragging !== null,
 		handlers: {
 			onFocus: () => {
 				wake();
@@ -232,15 +234,26 @@ export function useCompanionInteraction(mood: CompanionMood = "idle") {
 				pet(event);
 				if (
 					origin.current &&
+					!origin.current.moved &&
 					Math.hypot(
 						event.screenX - origin.current.x,
 						event.screenY - origin.current.y,
 					) > COMPANION_DRAG_THRESHOLD
 				) {
-					origin.current.moved = true;
+					const gesture = origin.current;
+					gesture.moved = true;
 					clear("hold");
 					setDelight(null);
-					setDragging(true);
+					setDragging("grabbed");
+					timers.current.hold = window.setTimeout(() => {
+						timers.current.hold = 0;
+						if (origin.current !== gesture) return;
+						setDragging("dragging");
+						timers.current.hold = window.setTimeout(() => {
+							timers.current.hold = 0;
+							if (origin.current === gesture) setDragging("struggling");
+						}, 950);
+					}, 250);
 				}
 			},
 			onPointerUp: (
@@ -256,9 +269,9 @@ export function useCompanionInteraction(mood: CompanionMood = "idle") {
 				origin.current = null;
 				clear("hold");
 				setPressed(false);
-				setDragging(false);
+				setDragging(null);
 				wake();
-				play(gesture.moved ? "landing" : "happy", gesture.moved ? 600 : 1200);
+				play(gesture.moved ? "landing" : "happy", gesture.moved ? 900 : 1200);
 				return gesture.moved ? "drag" : "tap";
 			},
 			onLostPointerCapture: () => {

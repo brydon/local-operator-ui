@@ -34,6 +34,7 @@ function fixture(t, { headless = true } = {}) {
 	const timeouts = new Map();
 	const intervals = new Map();
 	let timerId = 0;
+	let now = 0;
 	const windows = [];
 	const menus = [];
 	const Menu = {
@@ -137,9 +138,14 @@ function fixture(t, { headless = true } = {}) {
 		process,
 		console,
 		Buffer,
-		setTimeout: (fn) => {
+		Date: class extends Date {
+			static now() {
+				return now;
+			}
+		},
+		setTimeout: (callback, delay = 0) => {
 			const id = ++timerId;
-			timeouts.set(id, fn);
+			timeouts.set(id, { callback, due: now + delay });
 			return id;
 		},
 		clearTimeout: (id) => timeouts.delete(id),
@@ -203,11 +209,23 @@ function fixture(t, { headless = true } = {}) {
 		senderFrame: window.webContents.mainFrame,
 	});
 	const flush = async () => {
-		for (const [id, callback] of [...timeouts]) {
+		for (const [id, { callback }] of [...timeouts]) {
 			timeouts.delete(id);
 			callback();
 		}
 		await settle();
+	};
+	const advance = async (milliseconds) => {
+		const target = now + milliseconds;
+		for (;;) {
+			const next = [...timeouts].sort((a, b) => a[1].due - b[1].due)[0];
+			if (!next || next[1].due > target) break;
+			now = next[1].due;
+			timeouts.delete(next[0]);
+			next[1].callback();
+			await settle();
+		}
+		now = target;
 	};
 	return {
 		companion,
@@ -223,6 +241,10 @@ function fixture(t, { headless = true } = {}) {
 		intervals,
 		timeouts,
 		flush,
+		advance,
+		elapse: (milliseconds) => {
+			now += milliseconds;
+		},
 		catalogue: async (code, id) => {
 			await flush();
 			requests.shift().resolve(catalogue(code, id));
@@ -250,6 +272,22 @@ function catalogue(code, id = "session-a") {
 		sessions: [{ id, status: { code }, attention: { unseen: true } }],
 		degraded: [],
 	});
+}
+
+function drag(f, dx = -40, dy = -80, finish = "end") {
+	f.cursor({ x: 400, y: 400 });
+	f.action("drag", "start");
+	f.cursor({ x: 400 + dx, y: 400 + dy });
+	f.action("drag", "move");
+	if (finish === "blur") f.windows[0].emit("blur");
+	else if (finish === "menu") f.action("menu");
+	else f.action("drag", finish);
+}
+
+function motion(window) {
+	return window.messages
+		.filter(([channel]) => channel === "companion:motion")
+		.map(([, phase]) => phase);
 }
 
 test("headless companion never presents or changes desktop workspaces", (t) => {
@@ -415,6 +453,140 @@ test("dragging moves and saves; clicks and small jitters never open chat", async
 	assert.equal(window.ignoresMouse, false);
 	f.action("nudge", "ArrowLeft");
 	assert.equal(window.position[0], x - 64);
+});
+
+test("a released drag falls, bounces and saves its settled position without focus", async (t) => {
+	const f = fixture(t, { headless: false });
+	await f.flush();
+	const window = f.windows[0];
+	window.emit("ready-to-show");
+	f.action("reduced-motion", false);
+	drag(f);
+	const [x, y] = window.position;
+	const released = f.preferences().position;
+	assert.deepEqual(motion(window), ["falling"]);
+	f.action("drag", "cancel"); // Lost pointer capture follows a normal release.
+	await f.advance(130);
+	assert.ok(window.position[1] > y && window.position[1] < y + 24);
+	assert.deepEqual(f.preferences().position, released);
+	await f.advance(130);
+	assert.deepEqual(window.position, [x, y + 48]);
+	assert.deepEqual(motion(window), ["falling", "landing"]);
+	await f.advance(70);
+	assert.ok(window.position[1] >= y + 43 && window.position[1] < y + 48);
+	await f.advance(70);
+	assert.deepEqual(window.position, [x, y + 48]);
+	await f.advance(379);
+	assert.deepEqual(motion(window), ["falling", "landing"]);
+	await f.advance(1);
+	assert.deepEqual(motion(window), ["falling", "landing", "rest"]);
+	assert.deepEqual(f.preferences().position, { x, y: y + 48 });
+	assert.equal(f.timeouts.size, 0);
+	assert.deepEqual(window.presentations, ["inactive"]);
+	assert.equal(f.chat().open, false);
+});
+
+test("drop is opt-in to trusted motion preference and requires a real release", async (t) => {
+	for (const preference of [undefined, true, "false", null, "foreign"]) {
+		const f = fixture(t);
+		await f.flush();
+		if (preference === "foreign")
+			f.action("reduced-motion", false, { sender: {}, senderFrame: null });
+		else f.action("reduced-motion", preference);
+		drag(f);
+		const window = f.windows[0];
+		const position = [...window.position];
+		await f.advance(1000);
+		assert.deepEqual(window.position, position);
+		assert.deepEqual(motion(window), []);
+		assert.equal(f.timeouts.size, 0);
+	}
+	for (const finish of ["click", "jitter", "cancel", "blur", "menu"]) {
+		const f = fixture(t);
+		await f.flush();
+		f.action("reduced-motion", false);
+		if (finish === "click") drag(f, 0, 0);
+		else if (finish === "jitter") drag(f, 3, 2);
+		else drag(f, -40, -80, finish);
+		f.action("drag", "end");
+		await f.advance(1000);
+		assert.deepEqual(motion(f.windows[0]), [], finish);
+		assert.equal(f.timeouts.size, 0, finish);
+	}
+});
+
+test("drop respects the display floor and elapsed time after a delayed frame", async (t) => {
+	const f = fixture(t);
+	await f.flush();
+	const window = f.windows[0];
+	f.action("reduced-motion", false);
+	f.workArea({ x: -1920, y: -100, width: 1920, height: 1080 });
+	f.screen.emit("display-metrics-changed");
+	window.setPosition(-200, 834); // Ten pixels above this display's floor.
+	drag(f, -40, 0);
+	const x = window.position[0];
+	f.elapse(900);
+	await f.flush();
+	assert.deepEqual(window.position, [x, 844]);
+	assert.deepEqual(f.preferences().position, { x, y: 844 });
+	assert.deepEqual(motion(window), ["falling", "landing", "rest"]);
+	drag(f, -40, 0);
+	assert.equal(f.timeouts.size, 0);
+	assert.deepEqual(motion(window), ["falling", "landing", "rest"]);
+});
+
+test("interruptions freeze and persist a drop, including already queued frames", async (t) => {
+	for (const interruption of [
+		"drag",
+		"hide",
+		"dispose",
+		"display",
+		"nudge",
+		"menu",
+		"chat-size",
+		"reduced-motion",
+		"blur",
+		"close",
+	]) {
+		const f = fixture(t);
+		await f.flush();
+		const window = f.windows[0];
+		if (interruption === "chat-size") f.action("open");
+		f.action("reduced-motion", false);
+		drag(f);
+		await f.advance(128);
+		const staleFrame = [...f.timeouts.values()][0].callback;
+		if (interruption === "dispose") f.companion.dispose();
+		else if (interruption === "display")
+			f.screen.emit("display-metrics-changed");
+		else if (interruption === "blur") window.emit("blur");
+		else if (interruption === "close") window.destroy();
+		else {
+			const values = {
+				drag: "start",
+				nudge: "ArrowLeft",
+				"chat-size": 250,
+				"reduced-motion": true,
+			};
+			f.action(interruption, values[interruption]);
+		}
+		const position = [...window.position];
+		staleFrame();
+		await f.advance(1000);
+		assert.deepEqual(window.position, position, interruption);
+		assert.deepEqual(
+			f.preferences().position,
+			{
+				x: position[0] + window.size.width - 132,
+				y: position[1] + window.size.height - 136,
+			},
+			interruption,
+		);
+		assert.equal(f.timeouts.size, 0, interruption);
+		if (interruption !== "close")
+			assert.equal(motion(window).at(-1), "rest", interruption);
+		assert.deepEqual(window.presentations, [], interruption);
+	}
 });
 
 test("inline chat preserves its lower-right anchor through collapse and dragging", (t) => {

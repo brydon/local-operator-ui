@@ -146,7 +146,11 @@ export interface CompanionChatView {
 	snapshot: CompanionChatSnapshot;
 }
 
+export type CompanionMotion = "rest" | "falling" | "landing";
+
 export interface CompanionBridge {
+	onMotion(listener: (motion: CompanionMotion) => void): () => void;
+	setReducedMotion(reduced: boolean): void;
 	getChat(): Promise<CompanionChatView>;
 	onChat(listener: (view: CompanionChatView) => void): () => void;
 	sendMessage(text: string): Promise<boolean>;

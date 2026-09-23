@@ -3,10 +3,21 @@ import type { CompanionAppearance } from "../shared/companion-skin";
 import type {
 	CompanionBridge,
 	CompanionChatView,
+	CompanionMotion,
 	CompanionState,
 } from "../shared/desktop-companion";
 
 const companion: CompanionBridge = {
+	onMotion: (listener) => {
+		const receive = (
+			_event: Electron.IpcRendererEvent,
+			motion: CompanionMotion,
+		) => listener(motion);
+		ipcRenderer.on("companion:motion", receive);
+		return () => ipcRenderer.removeListener("companion:motion", receive);
+	},
+	setReducedMotion: (reduced) =>
+		ipcRenderer.send("companion:action", "reduced-motion", reduced),
 	showMenu: () => ipcRenderer.send("companion:action", "menu"),
 	resizeChat: (height) =>
 		ipcRenderer.send("companion:action", "chat-size", height),

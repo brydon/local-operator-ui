@@ -196,7 +196,7 @@ test("a tap is happy, a six-pixel move stays a tap, and dragging lands without a
 		assert.equal(button.dataset.reaction, "curious");
 		await event("pointerdown");
 		await event("pointermove", { screenX: 107 });
-		assert.equal(button.dataset.reaction, "dragging");
+		assert.equal(button.dataset.reaction, "grabbed");
 		await event("pointermove", { screenX: 100 });
 		await event("pointerup");
 		assert.equal(released(), "drag");
@@ -205,8 +205,34 @@ test("a tap is happy, a six-pixel move stays a tap, and dragging lands without a
 		assert.equal(button.dataset.reaction, "landing");
 		await event("pointerup");
 		assert.equal(released(), null);
-		await advance(600);
+		await advance(900);
 		assert.equal(button.dataset.reaction, "curious");
+	});
+});
+
+test("carrying progresses on one clock even while the pointer keeps moving", async () => {
+	await fixture(async ({ button, event, advance, released }) => {
+		await event("pointerdown");
+		await event("pointermove", { screenX: 110 });
+		assert.equal(button.dataset.reaction, "grabbed");
+		assert.equal(timers.size, 2);
+		await advance(200);
+		await event("pointermove", { screenX: 120 });
+		await advance(50);
+		assert.equal(button.dataset.reaction, "dragging");
+		assert.equal(timers.size, 2);
+		await event("pointerup", { pointerId: 2 });
+		assert.equal(released(), null);
+		await advance(900);
+		await event("pointermove", { screenX: 90 });
+		await advance(50);
+		assert.equal(button.dataset.reaction, "struggling");
+		assert.equal(timers.size, 1);
+		await event("pointerup");
+		assert.equal(released(), "drag");
+		assert.equal(button.dataset.reaction, "landing");
+		await advance(900);
+		assert.equal(button.dataset.reaction, "rest");
 	});
 });
 
@@ -226,7 +252,7 @@ test("stationary holding pets the companion; unrelated pointers cannot release i
 	});
 });
 
-test("three deliberate head rub reversals give bounded joy, only while idle", async () => {
+test("head rub reversals give bounded joy while idle or complete", async () => {
 	await fixture(async ({ button, event, advance, mood }) => {
 		const rub = async () => {
 			for (const screenX of [100, 120, 100, 120, 100])
@@ -243,9 +269,12 @@ test("three deliberate head rub reversals give bounded joy, only while idle", as
 		await advance(1800);
 		await rub();
 		assert.equal(button.dataset.reaction, "rest");
-		await mood("idle");
-		await rub();
-		assert.equal(button.dataset.reaction, "happy");
+		for (const state of ["idle", "complete"]) {
+			await mood(state);
+			await advance(1800);
+			await rub();
+			assert.equal(button.dataset.reaction, "happy");
+		}
 	});
 });
 
@@ -280,8 +309,14 @@ test("only an idle companion dozes, and hover, focus or work wakes it", async ()
 
 test("cancellation clears gestures; a visible unfocused companion can still doze", async () => {
 	await fixture(async ({ button, event, advance, flush, released }) => {
-		for (const type of ["pointercancel", "lostpointercapture", "blur"]) {
+		for (const [type, held] of [
+			["pointercancel", 0],
+			["lostpointercapture", 300],
+			["blur", 1300],
+		]) {
 			await event("pointerdown");
+			await event("pointermove", { screenX: 120 });
+			await advance(held);
 			button.setPointerCapture(1);
 			if (type === "blur")
 				await act(async () =>
@@ -329,6 +364,7 @@ test("keyboard engagement survives pointer leave; unmount cancels queued trackin
 		await act(async () => button.blur());
 		assert.equal(button.dataset.reaction, "rest");
 		await event("pointerdown");
+		await event("pointermove", { screenX: 120 });
 		button.setPointerCapture(1);
 		assert.equal(frames.size, 1);
 		assert.equal(timers.size, 2);

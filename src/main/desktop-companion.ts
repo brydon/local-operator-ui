@@ -49,6 +49,8 @@ export class DesktopCompanion {
 	private dirty = false;
 	private generation = 0;
 	private disposed = false;
+	private reducedMotion = true;
+	private drop: { timer: ReturnType<typeof setTimeout> | null } | null = null;
 	private dragOrigin: {
 		cursor: Electron.Point;
 		position: Electron.Point;
@@ -135,6 +137,7 @@ export class DesktopCompanion {
 		this.save();
 		this.options.visibilityChanged(enabled);
 		if (!enabled) {
+			this.cancelDrop();
 			this.stopPolling();
 			this.dragOrigin = null;
 			this.layoutChat(false);
@@ -153,6 +156,7 @@ export class DesktopCompanion {
 	}
 
 	private createWindow(): void {
+		this.reducedMotion = true;
 		const area = screen.getPrimaryDisplay().workArea;
 		const point = this.preferences.position ?? {
 			x: area.x + area.width - COMPANION_SIZE.width - 24,
@@ -202,7 +206,10 @@ export class DesktopCompanion {
 		window.once("ready-to-show", () => {
 			if (this.enabled && this.window === window) this.present();
 		});
-		window.on("blur", () => this.finishDrag());
+		window.on("blur", () => {
+			this.cancelDrop();
+			this.finishDrag();
+		});
 		window.on("closed", () => {
 			if (this.window === window) {
 				this.window = null;
@@ -287,6 +294,7 @@ export class DesktopCompanion {
 
 	/** Keep the lower-right anchor stable through expansion, collapse and dragging. */
 	private layoutChat(open: boolean): void {
+		this.cancelDrop();
 		if (!this.window) return;
 		const bounds = this.window.getBounds();
 		const area = screen.getDisplayMatching(bounds).workArea;
@@ -338,6 +346,56 @@ export class DesktopCompanion {
 		this.layoutChat(this.chatOpen);
 	}
 
+	private cancelDrop(): void {
+		if (!this.drop) return;
+		if (this.drop.timer !== null) clearTimeout(this.drop.timer);
+		this.drop = null;
+		this.rememberPosition();
+		this.save();
+		if (this.window && !this.window.isDestroyed())
+			this.window.webContents.send("companion:motion", "rest");
+	}
+
+	private startDrop(): void {
+		if (!this.window || this.reducedMotion) return;
+		const bounds = this.window.getBounds();
+		const area = screen.getDisplayMatching(bounds).workArea;
+		const distance = Math.min(
+			48,
+			area.y + area.height - bounds.y - bounds.height,
+		);
+		if (distance < 1) return;
+		const drop = { timer: null as ReturnType<typeof setTimeout> | null };
+		this.drop = drop;
+		const started = Date.now();
+		let landed = false;
+		this.window.webContents.send("companion:motion", "falling");
+		const frame = () => {
+			if (this.drop !== drop || !this.window) return;
+			const elapsed = Math.max(0, Date.now() - started);
+			if (elapsed >= 260 && !landed) {
+				landed = true;
+				this.window.webContents.send("companion:motion", "landing");
+			}
+			const fall = distance * Math.min(1, (elapsed / 260) ** 2);
+			const bounce =
+				elapsed >= 260 && elapsed < 400
+					? Math.min(5, distance) * Math.sin(((elapsed - 260) / 140) * Math.PI)
+					: 0;
+			this.move({ x: bounds.x, y: Math.round(bounds.y + fall - bounce) });
+			if (elapsed >= 780) {
+				this.cancelDrop();
+				return;
+			}
+			const boundary = elapsed < 260 ? 260 : elapsed < 400 ? 400 : 780;
+			drop.timer = setTimeout(
+				frame,
+				elapsed < 400 ? Math.min(16, boundary - elapsed) : boundary - elapsed,
+			);
+		};
+		drop.timer = setTimeout(frame, 16);
+	}
+
 	private finishDrag(): void {
 		const drag = this.dragOrigin;
 		this.dragOrigin = null;
@@ -346,6 +404,7 @@ export class DesktopCompanion {
 	}
 
 	private showMenu(): void {
+		this.cancelDrop();
 		this.finishDrag();
 		if (!this.window || this.options.headless) return;
 		Menu.buildFromTemplate([
@@ -373,7 +432,10 @@ export class DesktopCompanion {
 		if (!this.trusted(event) || !this.window) return;
 		if (action === "hide") this.setEnabled(false);
 		else if (action === "menu") this.showMenu();
-		else if (
+		else if (action === "reduced-motion" && typeof value === "boolean") {
+			this.reducedMotion = value;
+			if (value) this.cancelDrop();
+		} else if (
 			action === "chat-size" &&
 			this.chatOpen &&
 			typeof value === "number" &&
@@ -406,6 +468,7 @@ export class DesktopCompanion {
 			this.window.setIgnoreMouseEvents(!value, { forward: true });
 		} else if (action === "drag") {
 			if (value === "start") {
+				this.cancelDrop();
 				const [x, y] = this.window.getPosition();
 				this.dragOrigin = {
 					cursor: screen.getCursorScreenPoint(),
@@ -425,8 +488,10 @@ export class DesktopCompanion {
 						y: this.dragOrigin.position.y + dy,
 					});
 			} else if (value === "end" || value === "cancel") {
+				const released = value === "end" && this.dragOrigin?.moved;
 				this.save();
 				this.finishDrag();
+				if (released) this.startDrop();
 			}
 		} else if (action === "nudge" && typeof value === "string") {
 			const offsets: Record<string, [number, number]> = {
@@ -436,6 +501,7 @@ export class DesktopCompanion {
 				ArrowDown: [0, 24],
 			};
 			if (!Object.prototype.hasOwnProperty.call(offsets, value)) return;
+			this.cancelDrop();
 			const offset = offsets[value];
 			const [x, y] = this.window.getPosition();
 			this.move({ x: x + offset[0], y: y + offset[1] });
@@ -456,6 +522,7 @@ export class DesktopCompanion {
 	}
 
 	dispose(): void {
+		this.cancelDrop();
 		this.disposed = true;
 		this.chat.dispose();
 		this.stopPolling();
