@@ -40,7 +40,7 @@ export function useCompanionInteraction(
 		x: number;
 		direction: number;
 		turns: number;
-		started: number;
+		updated: number;
 	} | null>(null);
 	const lastPetAt = useRef(Number.NEGATIVE_INFINITY);
 	const lastLovedAt = useRef(Number.NEGATIVE_INFINITY);
@@ -302,8 +302,8 @@ export function useCompanionInteraction(
 		}
 		if (time - lastPetAt.current < 1800) return;
 		const stroke = rub.current;
-		if (!stroke || time - stroke.started > 1200) {
-			rub.current = { x: event.screenX, direction: 0, turns: 0, started: time };
+		if (!stroke || time - stroke.updated > 900) {
+			rub.current = { x: event.screenX, direction: 0, turns: 0, updated: time };
 			return;
 		}
 		const delta = event.screenX - stroke.x;
@@ -312,6 +312,7 @@ export function useCompanionInteraction(
 		if (stroke.direction && direction !== stroke.direction) stroke.turns++;
 		stroke.direction = direction;
 		stroke.x = event.screenX;
+		stroke.updated = time;
 		if (stroke.turns >= 3) {
 			lastPetAt.current = time;
 			rub.current = null;
@@ -461,6 +462,7 @@ export function useCompanionInteraction(
 					return;
 				attention.current.focused = false;
 				setFocused(false);
+				rub.current = null;
 				const finding =
 					ambient.current === "peekaboo" || ambient.current === "peeking";
 				const waking = sleeping.current;

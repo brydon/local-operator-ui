@@ -185,7 +185,7 @@ function Companion() {
 							: "";
 	const playHint = play.scene
 		? play.scene.kind === "guess"
-			? "Choose the left or right hand. Click a side or use Left or Right. Escape ends play."
+			? "Choose a side. Click left or right, or use Left or Right. Escape ends play."
 			: play.scene.kind === "bounce"
 				? "Click or press Enter to keep the ball up. Escape ends play."
 				: "Click or press Enter to offer the treat. Escape ends play."

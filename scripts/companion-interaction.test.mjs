@@ -879,6 +879,29 @@ test("head rub reversals give bounded joy while idle or complete", async () => {
 	});
 });
 
+test("gentle continuous head rubs count, while pauses and taps end a stroke", async () => {
+	await fixture(async ({ button, event, advance }) => {
+		const stroke = (screenX) => event("pointermove", { screenX, clientY: 40 });
+		for (const screenX of [100, 120, 100, 120, 100]) {
+			await advance(600);
+			await stroke(screenX);
+		}
+		assert.equal(button.dataset.reaction, "loved");
+		await advance(2000);
+		for (const screenX of [100, 120, 100, 120]) await stroke(screenX);
+		await advance(901);
+		await stroke(100);
+		assert.equal(button.dataset.reaction, "rest");
+		for (const screenX of [120, 100, 120]) await stroke(screenX);
+		await event("pointerdown");
+		await event("pointerup");
+		await stroke(100);
+		assert.equal(button.dataset.reaction, "happy");
+		for (const screenX of [120, 100, 120, 100]) await stroke(screenX);
+		assert.equal(button.dataset.reaction, "loved");
+	});
+});
+
 test("idle and completed companions sleep, while live task states stay awake", async () => {
 	await fixture(async ({ button, event, advance, mood, visibility }) => {
 		await advance(89_999);

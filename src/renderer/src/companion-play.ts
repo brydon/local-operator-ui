@@ -97,7 +97,7 @@ export function useCompanionPlay(available: boolean, characterId: string) {
 				kind === "snack"
 					? "Tap to share a snack."
 					: kind === "guess"
-						? "Choose a paw: left or right."
+						? "Choose a side: left or right."
 						: reducedMotion.current
 							? "Tap the ball five times."
 							: "Tap to keep the ball up.",
