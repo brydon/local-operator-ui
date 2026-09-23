@@ -106,6 +106,9 @@ function Companion() {
 				: interaction.reaction;
 	const needsAttention =
 		!!state.sessionId && (state.mood === "attention" || state.mood === "error");
+	const sleeping =
+		reaction === "dozing" &&
+		(state.mood === "idle" || state.mood === "complete");
 	useEffect(() => {
 		const unsubscribe = window.companion.onMotion(setMotion);
 		const preference = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -193,7 +196,7 @@ function Companion() {
 					className={cn("companion-character")}
 					{...interaction.handlers}
 					data-reaction={reaction}
-					aria-label={`${appearance.name}. ${state.label}. Click to pet. Use the chat button to talk. Drag or use arrow keys to move. Right-click for options.`}
+					aria-label={`${appearance.name}. ${sleeping ? "Sleeping. Click to wake." : `${state.label}. Click to pet.`} Use the chat button to talk. Drag or use arrow keys to move. Right-click for options.`}
 					onContextMenu={(event) => {
 						event.preventDefault();
 						interaction.reset();
@@ -256,20 +259,38 @@ function Companion() {
 							event.key === "ArrowDown"
 						) {
 							event.preventDefault();
+							interaction.wake();
 							window.companion.nudge(event.key);
 						}
 					}}
 				>
 					{appearance.frames ? (
-						<img
-							className={cn(
-								"companion-custom-art",
-								appearance.pixelated && "companion-custom-pixel",
+						<>
+							<img
+								className={cn(
+									"companion-custom-art",
+									appearance.pixelated && "companion-custom-pixel",
+									sleeping && "companion-custom-sleeping",
+								)}
+								src={
+									(sleeping ? appearance.frames.sleeping : undefined) ??
+									appearance.frames[state.mood] ??
+									appearance.frames.idle
+								}
+								alt=""
+								draggable={false}
+							/>
+							{sleeping && !appearance.frames.sleeping && (
+								<svg
+									className={cn("companion-custom-sleep")}
+									viewBox="0 0 26 30"
+									aria-hidden="true"
+									focusable="false"
+								>
+									<path d="M2 17h8l-8 8h8m4-21h9l-9 9h9" />
+								</svg>
 							)}
-							src={appearance.frames[state.mood] ?? appearance.frames.idle}
-							alt=""
-							draggable={false}
-						/>
+						</>
 					) : (
 						<CompanionArt
 							character={

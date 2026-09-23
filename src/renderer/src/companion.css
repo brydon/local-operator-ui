@@ -61,6 +61,7 @@ body {
 }
 .companion-character {
 	display: block;
+	position: relative;
 	width: 110px;
 	height: 110px;
 	flex-shrink: 0;
@@ -86,6 +87,31 @@ body {
 }
 .companion-custom-pixel {
 	image-rendering: pixelated;
+}
+.companion-custom-sleeping {
+	animation: companion-custom-sleep 6.4s ease-in-out infinite;
+}
+.companion-custom-sleep {
+	position: absolute;
+	right: 6px;
+	top: 4px;
+	width: 26px;
+	height: 30px;
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 2;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+	pointer-events: none;
+}
+@keyframes companion-custom-sleep {
+	0%,
+	100% {
+		transform: translateY(4px) rotate(-6deg) scale(0.97, 0.93);
+	}
+	50% {
+		transform: translateY(3px) rotate(-6deg) scale(0.98, 0.95);
+	}
 }
 .companion-character[data-reaction="pressed"] .companion-custom-art {
 	transform: scaleY(0.96);
@@ -123,5 +149,8 @@ body {
 		animation: none;
 		transition: none;
 		transform: none;
+	}
+	.companion-character[data-reaction="dozing"] .companion-custom-sleeping {
+		transform: translateY(4px) rotate(-6deg) scale(0.97, 0.93);
 	}
 }

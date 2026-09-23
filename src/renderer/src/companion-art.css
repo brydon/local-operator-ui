@@ -4,6 +4,8 @@
 	--companion-art-blink: 6.4s;
 	--companion-art-affection: 1050ms;
 	--companion-art-wriggle: 1.9s;
+	--companion-art-sleep-pose: translateY(5px) rotate(-2deg) scale(1.045, 0.86);
+	--companion-art-sleep-breath: 7.6s;
 	--companion-art-motion: cubic-bezier(0.22, 0.7, 0.3, 1);
 	display: block;
 	position: relative;
@@ -23,6 +25,8 @@
 	--companion-art-blink: 7.2s;
 	--companion-art-affection: 1150ms;
 	--companion-art-wriggle: 2s;
+	--companion-art-sleep-pose: translateY(5px) rotate(-9deg) scale(0.96, 0.93);
+	--companion-art-sleep-breath: 8.4s;
 }
 
 .companion-art-pixel {
@@ -30,6 +34,8 @@
 	--companion-art-blink: 5.8s;
 	--companion-art-affection: 900ms;
 	--companion-art-wriggle: 1.7s;
+	--companion-art-sleep-pose: translateY(3px) rotate(2deg) scaleY(0.92);
+	--companion-art-sleep-breath: 7s;
 	--companion-art-motion: steps(5, end);
 }
 
@@ -123,14 +129,89 @@
 	animation: companion-art-land 520ms var(--companion-art-motion);
 }
 
-.companion-art[data-expression="idle"][data-reaction="dozing"]
-	.companion-art-pose {
-	transform: translateY(2px) rotate(-2deg) scaleY(0.97);
+.companion-art[data-sleeping] .companion-art-pose {
+	transform: var(--companion-art-sleep-pose);
+	transition-duration: 650ms;
 }
 
-.companion-art[data-expression="idle"][data-reaction="dozing"]
-	.companion-art-visual {
-	animation-duration: 7.2s;
+.companion-art[data-sleeping] .companion-art-visual {
+	animation: companion-art-sleep-breathe var(--companion-art-sleep-breath)
+		var(--companion-art-motion) infinite;
+}
+
+.companion-art-hoodie[data-sleeping] .companion-art-gaze {
+	transform: translateY(4px);
+}
+
+.companion-art-pixel[data-sleeping] .companion-art-face {
+	opacity: 0.72;
+}
+
+.companion-art-leaves {
+	display: none;
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	clip-path: inset(0 0 74% 0);
+	transform-origin: 50% 26%;
+}
+
+.companion-art-sprout:is(
+		[data-sleeping],
+		[data-expression="idle"][data-reaction="waking"]
+	)
+	.companion-art-body {
+	clip-path: inset(26% 0 0 0);
+}
+
+.companion-art-sprout:is(
+		[data-sleeping],
+		[data-expression="idle"][data-reaction="waking"]
+	)
+	.companion-art-leaves {
+	display: block;
+}
+
+.companion-art[data-sleeping] .companion-art-leaves {
+	animation: companion-art-leaf-nod 7.6s ease-in-out infinite;
+}
+
+.companion-art[data-expression="idle"][data-reaction="waking"]
+	.companion-art-leaves {
+	animation: companion-art-leaf-wake 800ms ease-out;
+}
+
+.companion-art-sleep-marks {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	fill: none;
+	stroke: var(--companion-art-light);
+	stroke-width: 1.7;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+	opacity: 0;
+	transition: opacity 240ms ease;
+}
+
+.companion-art-pixel .companion-art-sleep-marks {
+	stroke-linecap: square;
+	stroke-linejoin: miter;
+}
+
+.companion-art[data-sleeping] .companion-art-sleep-marks {
+	opacity: 0.65;
+}
+
+.companion-art-sleep-drift {
+	opacity: 0;
+}
+
+.companion-art[data-sleeping] .companion-art-sleep-drift {
+	animation: companion-art-sleep-drift var(--companion-art-sleep-breath)
+		ease-out infinite;
 }
 
 .companion-art-body {
@@ -710,9 +791,59 @@
 	}
 }
 
+@keyframes companion-art-sleep-breathe {
+	0%,
+	100% {
+		transform: none;
+	}
+	50% {
+		transform: translateY(-1px) scaleY(1.015);
+	}
+}
+
+@keyframes companion-art-leaf-nod {
+	0%,
+	100% {
+		transform: rotate(0deg);
+	}
+	45%,
+	65% {
+		transform: rotate(6deg);
+	}
+}
+
+@keyframes companion-art-leaf-wake {
+	0% {
+		transform: rotate(4deg);
+	}
+	55% {
+		transform: rotate(-3deg);
+	}
+	100% {
+		transform: none;
+	}
+}
+
+@keyframes companion-art-sleep-drift {
+	0%,
+	40%,
+	100% {
+		opacity: 0;
+		transform: translateY(2px);
+	}
+	55%,
+	68% {
+		opacity: 0.8;
+	}
+	85% {
+		opacity: 0;
+		transform: translateY(-5px);
+	}
+}
+
 @keyframes companion-art-wake {
 	0% {
-		transform: translateY(2px) rotate(-2deg) scaleY(0.97);
+		transform: var(--companion-art-sleep-pose);
 	}
 	45% {
 		transform: translateY(-3px) rotate(1deg) scale(0.98, 1.055);
@@ -1129,7 +1260,10 @@
 			.companion-art-game-ball,
 			.companion-art-paddle-left,
 			.companion-art-paddle-right,
-			.companion-art-motes
+			.companion-art-motes,
+			.companion-art-leaves,
+			.companion-art-sleep-marks,
+			.companion-art-sleep-drift
 		) {
 		animation: none;
 		transition: none;
@@ -1148,6 +1282,11 @@
 		.companion-art-hearts {
 		display: block;
 		opacity: 0.65;
+	}
+
+	.companion-art[data-sleeping][data-expression][data-reaction]
+		.companion-art-pose {
+		transform: var(--companion-art-sleep-pose);
 	}
 
 	.companion-art-hoodie[data-reaction="landing"] .companion-art-body {

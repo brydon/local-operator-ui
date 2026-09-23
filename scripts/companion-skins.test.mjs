@@ -109,11 +109,17 @@ function savedId(pack) {
 test("import copies poses, preserves optional poses and survives removal of source files", (t) => {
 	const f = fixture(t);
 	const working = png({ pixels: Buffer.alloc(18, 1) });
+	const sleeping = png({ pixels: Buffer.alloc(18, 2) });
 	writeFileSync(join(f.source, "working.png"), working);
+	writeFileSync(join(f.source, "sleeping.png"), sleeping);
 	f.write({
 		name: " Fern ",
 		pixelated: true,
-		frames: { idle: "idle.png", working: "working.png" },
+		frames: {
+			idle: "idle.png",
+			working: "working.png",
+			sleeping: "sleeping.png",
+		},
 	});
 	const result = f.library.import(f.manifest);
 	assert.match(result.id, ID);
@@ -121,7 +127,11 @@ test("import copies poses, preserves optional poses and survives removal of sour
 		id: result.id,
 		name: "Fern",
 		pixelated: true,
-		frames: { idle: dataUrl(f.idle), working: dataUrl(working) },
+		frames: {
+			idle: dataUrl(f.idle),
+			working: dataUrl(working),
+			sleeping: dataUrl(sleeping),
+		},
 	});
 	assert.equal(f.library.import(f.manifest).id, result.id);
 	assert.equal(f.library.list().length, 4);
@@ -137,6 +147,37 @@ test("import copies poses, preserves optional poses and survives removal of sour
 			statSync(join(f.libraryPath, `${result.id}.json`)).mode & 0o777,
 			0o600,
 		);
+});
+
+test("all seven poses near the image size limit survive a library restart", (t) => {
+	const f = fixture(t);
+	const text = Buffer.alloc(2 * 1024 * 1024 - 100, 97);
+	text.write("Comment\0");
+	writeFileSync(
+		join(f.source, "large.png"),
+		png({ extra: [chunk("tEXt", text)] }),
+	);
+	f.write({
+		frames: Object.fromEntries(
+			[
+				"idle",
+				"working",
+				"attention",
+				"complete",
+				"error",
+				"offline",
+				"sleeping",
+			].map((pose) => [pose, "large.png"]),
+		),
+	});
+	const result = f.library.import(f.manifest);
+	assert.ok(
+		statSync(join(f.libraryPath, `${result.id}.json`)).size > 17 * 1024 * 1024,
+	);
+	assert.deepEqual(
+		new CompanionSkinLibrary(f.libraryPath).get(result.id),
+		result,
+	);
 });
 
 test("single PNG import names the companion and persists an idle-only pose", (t) => {
@@ -171,6 +212,7 @@ test("schema requires an idle pose and rejects unsupported or mistyped fields", 
 		{ name: "bad\nname" },
 		{ frames: {} },
 		{ frames: { idle: 1 } },
+		{ frames: { idle: "idle.png", sleeping: 1 } },
 		{ frames: { idle: "idle.png", thinking: "idle.png" } },
 		{ pixelated: "true" },
 		{ script: "run.js" },
@@ -197,13 +239,17 @@ test("poses cannot escape the selected folder or fetch a URL", (t) => {
 		"data:image/png;base64,anything",
 		"idle.svg",
 	]) {
-		f.write({ frames: { idle: path } });
-		assert.throws(() => f.library.import(f.manifest), PATH_ERROR);
+		for (const pose of ["idle", "sleeping"]) {
+			f.write({ frames: { idle: "idle.png", [pose]: path } });
+			assert.throws(() => f.library.import(f.manifest), PATH_ERROR);
+		}
 	}
 	writeFileSync(join(f.root, "outside.png"), f.idle);
 	symlinkSync(join(f.root, "outside.png"), join(f.source, "escape.png"));
-	f.write({ frames: { idle: "escape.png" } });
-	assert.throws(() => f.library.import(f.manifest), ESCAPE_ERROR);
+	for (const pose of ["idle", "sleeping"]) {
+		f.write({ frames: { idle: "idle.png", [pose]: "escape.png" } });
+		assert.throws(() => f.library.import(f.manifest), ESCAPE_ERROR);
+	}
 	mkdirSync(join(f.source, "nested"));
 	symlinkSync(
 		join(f.source, "idle.png"),
@@ -293,16 +339,21 @@ test("stored packs are validated individually and a corrupt pack cannot hide a h
 	const valid = JSON.parse(
 		readFileSync(join(f.libraryPath, `${good.id}.json`), "utf8"),
 	);
-	for (const idle of [
+	for (const invalid of [
 		"https://example.com/pet.png",
 		"data:image/png;base64,bm90IHBuZw==",
 		"data:image/png;base64,!bad",
 	]) {
-		const corrupt = { ...valid, frames: { idle } };
-		writeFileSync(
-			join(f.libraryPath, `${savedId(corrupt)}.json`),
-			JSON.stringify(corrupt),
-		);
+		for (const pose of ["idle", "sleeping"]) {
+			const corrupt = {
+				...valid,
+				frames: { ...valid.frames, [pose]: invalid },
+			};
+			writeFileSync(
+				join(f.libraryPath, `${savedId(corrupt)}.json`),
+				JSON.stringify(corrupt),
+			);
+		}
 	}
 	writeFileSync(
 		join(f.libraryPath, "custom-00000000000000000000000000000000.json"),

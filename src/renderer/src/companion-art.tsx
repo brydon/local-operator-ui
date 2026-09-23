@@ -250,7 +250,11 @@ function Eyes({ mood, pixels, reaction }: ExpressionProps) {
 	if (expression === "dozing") {
 		return (
 			<path
-				d={pixels ? "M19 31h16m30 0h16" : "M19 30q8 5 16 0m30 0q8 5 16 0"}
+				d={
+					pixels
+						? "M18 29v4h18v-4m28 0v4h18v-4"
+						: "M18 28q9 10 18 0m28 0q9 10 18 0"
+				}
 			/>
 		);
 	}
@@ -396,7 +400,8 @@ function Mouth({ mood, pixels, reaction }: ExpressionProps) {
 				/>
 			);
 		}
-		if (reaction === "dozing") return <path d="M46 53h8" />;
+		if (reaction === "dozing")
+			return <rect x="47" y="50" width="6" height="5" rx={pixels ? 0 : 2.5} />;
 		if (reaction === "pressed" || reaction === "landing") {
 			return <path d={pixels ? "M42 50v5h16v-5" : "M40 49q10 10 20 0"} />;
 		}
@@ -540,6 +545,7 @@ export function CompanionArt({
 	const vignette =
 		expressionMood === "idle" &&
 		["stretching", "yawning", "daydream"].includes(reaction);
+	const sleeping = expressionMood === "idle" && reaction === "dozing";
 	const face = useFaceAnimation(lively, character);
 	const interacting = reaction !== "rest" && reaction !== "dozing" && !vignette;
 	const x = reaction === "listening" ? -0.55 : interacting ? gaze.x : 0;
@@ -561,6 +567,7 @@ export function CompanionArt({
 			data-reaction={reaction}
 			data-physical={physical || undefined}
 			data-vignette={vignette || undefined}
+			data-sleeping={sleeping || undefined}
 			data-celebrating={celebrating || undefined}
 			data-face-beat={lively ? face.index : undefined}
 			data-paused={face.paused || undefined}
@@ -574,6 +581,14 @@ export function CompanionArt({
 						alt=""
 						draggable={false}
 					/>
+					{character === "sprout" && (
+						<img
+							className={cn("companion-art-leaves")}
+							src={sprout}
+							alt=""
+							draggable={false}
+						/>
+					)}
 					{character === "hoodie" ? (
 						<span className={cn("companion-art-sprite")} />
 					) : (
@@ -655,6 +670,16 @@ export function CompanionArt({
 					<circle cx="20" cy="30" r="1" />
 				</svg>
 			)}
+			<svg
+				aria-hidden="true"
+				className={cn("companion-art-sleep-marks")}
+				viewBox="0 0 100 100"
+				focusable="false"
+				shapeRendering={pixels ? "crispEdges" : "geometricPrecision"}
+			>
+				<path d="M77 35h6l-6 6h6" />
+				<path className={cn("companion-art-sleep-drift")} d="M84 26h7l-7 7h7" />
+			</svg>
 			<svg
 				aria-hidden="true"
 				className={cn("companion-art-hearts")}

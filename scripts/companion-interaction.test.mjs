@@ -503,7 +503,7 @@ test("idle and completed companions sleep, while live task states stay awake", a
 	});
 });
 
-test("cancellation clears gestures; a visible unfocused companion can still doze", async () => {
+test("cancellation clears gestures and restarts sleep for visible companions", async () => {
 	await fixture(async ({ button, event, advance, flush, released }) => {
 		for (const [type, held] of [
 			["pointercancel", 0],
@@ -519,17 +519,14 @@ test("cancellation clears gestures; a visible unfocused companion can still doze
 					window.dispatchEvent(new dom.window.Event("blur")),
 				);
 			else await event(type);
-			assert.equal(timers.size, type === "blur" ? 1 : 0);
+			assert.equal(timers.size, 1);
 			assert.equal(frames.size, 0);
 			assert.equal(button.hasPointerCapture(1), false);
 			await advance(100_000);
 			await flush();
 			await event("pointerup");
 			assert.equal(released(), null);
-			assert.equal(
-				button.dataset.reaction,
-				type === "blur" ? "dozing" : "rest",
-			);
+			assert.equal(button.dataset.reaction, "dozing");
 		}
 	});
 });

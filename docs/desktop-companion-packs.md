@@ -9,8 +9,8 @@ When a task needs attention, the alert button opens that task directly.
 
 Brush back and forth over their head or tap a few times for a little heart reaction.
 Pick them up to see them dangle and wriggle; releasing gives them a short fall and
-a soft landing. Idle companions doze off and stretch when you return; they stay
-awake while chat is open. After a quiet moment, morning brings a stretch, daytime
+a soft landing. All companions sleep after 90 quiet seconds, including after completed
+tasks, and wake when you interact. They stay awake while chat is open. After a quiet moment, morning brings a stretch, daytime
 brings a character-specific diversion, and late night brings a yawn. A little extra
 affection can reveal a surprise. These use your local clock and pause for interaction
 or work. Reduced motion skips idle antics, keeps reactions still, and disables the drop.
@@ -31,12 +31,15 @@ PNG, or a JSON pack for different task states:
     "attention": "attention.png",
     "complete": "complete.png",
     "error": "error.png",
-    "offline": "offline.png"
+    "offline": "offline.png",
+    "sleeping": "sleeping.png"
   }
 }
 ```
 
-Only `idle` is required; omit missing poses to use it as the fallback. Images must
+Only `idle` is required; omit missing task poses to use it as the fallback. The optional
+`sleeping` pose appears when the companion dozes; without it, your existing image
+settles down with a small sleep mark. Waking restores the current task pose. Images must
 be still PNGs, at most 2048 × 2048 pixels and 2 MiB each. Paths are relative to the
 pack folder and cannot leave it. Names may contain 1–64 characters. Up to 64 custom
 characters can be imported. The app copies the files; import an edited pack again

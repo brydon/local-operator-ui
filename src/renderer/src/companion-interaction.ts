@@ -199,12 +199,8 @@ export function useCompanionInteraction(
 		setHovered(false);
 		setFocused(false);
 		setGaze({ x: 0, y: 0 });
-	}, [cleanup]);
-
-	const blur = useCallback(() => {
-		reset();
-		if (!document.hidden) wake();
-	}, [reset, wake]);
+		if (!document.hidden) wake(false);
+	}, [cleanup, wake]);
 
 	function pet(event: PointerEvent<HTMLButtonElement>) {
 		const bounds = event.currentTarget.getBoundingClientRect();
@@ -278,16 +274,16 @@ export function useCompanionInteraction(
 	useEffect(() => {
 		const visibility = () => (document.hidden ? reset() : wake());
 		const focus = () => wake();
-		window.addEventListener("blur", blur);
+		window.addEventListener("blur", reset);
 		window.addEventListener("focus", focus);
 		document.addEventListener("visibilitychange", visibility);
 		return () => {
-			window.removeEventListener("blur", blur);
+			window.removeEventListener("blur", reset);
 			window.removeEventListener("focus", focus);
 			document.removeEventListener("visibilitychange", visibility);
 			cleanup();
 		};
-	}, [blur, cleanup, reset, wake]);
+	}, [cleanup, reset, wake]);
 
 	const reaction: CompanionReaction =
 		dragging ??
@@ -303,6 +299,7 @@ export function useCompanionInteraction(
 		reaction,
 		gaze,
 		tap,
+		wake,
 		reset,
 		isEngaged: hovered || focused || pressed || dragging !== null,
 		handlers: {
@@ -311,7 +308,7 @@ export function useCompanionInteraction(
 				wake();
 				setFocused(true);
 			},
-			onBlur: blur,
+			onBlur: reset,
 			onPointerEnter: (event: PointerEvent<HTMLButtonElement>) => {
 				wake();
 				if (event.pointerType !== "touch") {

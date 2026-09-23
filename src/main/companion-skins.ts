@@ -25,21 +25,22 @@ import { crc32, inflateSync } from "node:zlib";
 import {
 	BUILTIN_COMPANIONS,
 	type CompanionAppearance,
+	type CompanionPose,
 } from "../shared/companion-skin";
-import type { CompanionMood } from "../shared/desktop-companion";
 
-const MOODS: readonly CompanionMood[] = [
+const POSES: readonly CompanionPose[] = [
 	"idle",
 	"working",
 	"attention",
 	"complete",
 	"error",
 	"offline",
+	"sleeping",
 ];
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 const MAX_EDGE = 2048;
 const MAX_MANIFEST_BYTES = 64 * 1024;
-const MAX_SAVED_BYTES = 17 * 1024 * 1024;
+const MAX_SAVED_BYTES = 19 * 1024 * 1024;
 const MAX_PACKS = 64;
 const PNG_PREFIX = "data:image/png;base64,";
 const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
@@ -51,7 +52,7 @@ const NAME_SEPARATORS = /[\p{Cc}\s_-]+/gu;
 interface StoredPack {
 	version: 1;
 	name: string;
-	frames: Partial<Record<CompanionMood, string>>;
+	frames: Partial<Record<CompanionPose, string>>;
 	pixelated: boolean;
 }
 
@@ -227,7 +228,7 @@ function normalizePack(
 	}
 	const sources = object(pack.frames);
 	if (
-		Object.keys(sources).some((key) => !MOODS.includes(key as CompanionMood))
+		Object.keys(sources).some((key) => !POSES.includes(key as CompanionPose))
 	) {
 		throw new Error("This companion pack contains an unknown pose name.");
 	}
@@ -235,13 +236,13 @@ function normalizePack(
 		throw new Error("A companion pack needs an idle PNG pose.");
 	}
 	const frames: StoredPack["frames"] = {};
-	for (const mood of MOODS) {
-		if (sources[mood] === undefined) continue;
-		if (typeof sources[mood] !== "string")
+	for (const pose of POSES) {
+		if (sources[pose] === undefined) continue;
+		if (typeof sources[pose] !== "string")
 			throw new Error("Each pose must name a PNG file.");
-		const bytes = readFrame(sources[mood]);
+		const bytes = readFrame(sources[pose]);
 		validatePng(bytes);
-		frames[mood] = PNG_PREFIX + bytes.toString("base64");
+		frames[pose] = PNG_PREFIX + bytes.toString("base64");
 	}
 	return {
 		version: 1,

@@ -1,9 +1,11 @@
 import type { CompanionMood } from "./desktop-companion";
 
+export type CompanionPose = CompanionMood | "sleeping";
+
 export interface CompanionAppearance {
 	id: string;
 	name: string;
-	frames?: Partial<Record<CompanionMood, string>>;
+	frames?: Partial<Record<CompanionPose, string>>;
 	pixelated?: boolean;
 }
 
