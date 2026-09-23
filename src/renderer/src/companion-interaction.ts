@@ -5,7 +5,11 @@ import {
 	type CompanionMood,
 } from "../../shared/desktop-companion";
 import type { CompanionReaction } from "./companion-art";
-import { type CompanionScene, getCompanionScene } from "./companion-scenes";
+import {
+	type CompanionScene,
+	getCompanionIdleScenes,
+	getCompanionScene,
+} from "./companion-scenes";
 
 type DelightReaction =
 	| "happy"
@@ -87,13 +91,8 @@ export function useCompanionInteraction(
 				reaction === "peekaboo" ||
 				reaction === "peeking" ||
 				reaction === "playful" ||
-				reaction === "bubbles" ||
-				reaction === "leafplay" ||
-				reaction === "shell" ||
-				reaction === "relax" ||
-				reaction === "balance" ||
-				reaction === "spin" ||
-				reaction === "juggle"
+				(reaction !== "cuddle" &&
+					getCompanionScene(currentCharacter.current, reaction))
 					? reaction
 					: null;
 			setDelight(reaction);
@@ -151,35 +150,18 @@ export function useCompanionInteraction(
 								: hour >= 11 && hour <= 20
 									? "daydream"
 									: "yawning";
-						const signature =
-							currentCharacter.current === "hoodie"
-								? "relax"
-								: currentCharacter.current === "pixel"
-									? "balance"
-									: currentCharacter.current === "sprout"
-										? "spin"
-										: null;
-						const scenes: DelightReaction[] =
-							currentCharacter.current === "inky"
-								? [
-										"peekaboo",
-										timeOfDay,
-										"bubbles",
-										"daydream",
-										"leafplay",
-										"playful",
-										"shell",
-										timeOfDay,
-										"juggle",
-										"daydream",
-									]
-								: [
-										"peekaboo",
-										timeOfDay,
-										"playful",
-										"daydream",
-										...(signature ? ([signature, timeOfDay] as const) : []),
-									];
+						const scenes: DelightReaction[] = [
+							"peekaboo",
+							timeOfDay,
+							...getCompanionIdleScenes(currentCharacter.current).flatMap(
+								(scene, i): DelightReaction[] => [
+									scene,
+									i % 2 === 0 ? "daydream" : timeOfDay,
+								],
+							),
+							"playful",
+							"daydream",
+						];
 						const scene = scenes[nextScene.current % scenes.length];
 						const duration =
 							getCompanionScene(currentCharacter.current, scene)?.duration ??

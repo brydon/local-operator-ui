@@ -321,7 +321,8 @@ test("quiet rests alternate one playful scene and one time-of-day gesture before
 		[21, "yawning"],
 		[4, "yawning"],
 	]) {
-		await fixture(async ({ button, advance, hour, event }) => {
+		await fixture(async ({ button, advance, hour, event, character }) => {
+			await character("custom");
 			hour(time);
 			for (const [first, second, duration] of [
 				["peekaboo", reaction, 4800],
@@ -368,9 +369,12 @@ test("Inky rotates discoveries without adding idle opportunities or delaying sle
 		for (const [first, second, firstDuration, secondDuration] of [
 			["peekaboo", "yawning", 4800, 2600],
 			["bubbles", "daydream", 4000, 2600],
-			["leafplay", "playful", 4000, 4000],
-			["shell", "yawning", 4000, 2600],
-			["juggle", "daydream", 5200, 2600],
+			["leafplay", "yawning", 4000, 2600],
+			["shell", "daydream", 4000, 2600],
+			["juggle", "yawning", 5200, 2600],
+			["suction", "daydream", 4800, 2600],
+			["camouflage", "yawning", 6000, 2600],
+			["playful", "daydream", 4000, 2600],
 		]) {
 			await advance(27_999);
 			assert.equal(button.dataset.reaction, "rest");
@@ -398,9 +402,17 @@ test("Inky rotates discoveries without adding idle opportunities or delaying sle
 test("character routines finish before sleep and yield to work and reduced motion", async () => {
 	for (const [character, scene, duration, rests] of [
 		["hoodie", "relax", 6200, 2],
+		["hoodie", "paperboat", 5200, 1],
+		["hoodie", "scarf", 5600, 3],
 		["pixel", "balance", 4800, 2],
+		["pixel", "lens", 4800, 1],
+		["pixel", "firefly", 5200, 3],
 		["sprout", "spin", 3600, 2],
+		["sprout", "dew", 4800, 1],
+		["sprout", "bloom", 5600, 3],
 		["inky", "juggle", 5200, 4],
+		["inky", "suction", 4800, 5],
+		["inky", "camouflage", 6000, 6],
 	]) {
 		await fixture(async (f) => {
 			await f.character(character);

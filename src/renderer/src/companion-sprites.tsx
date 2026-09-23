@@ -1,10 +1,13 @@
 import { cn } from "@shared/lib/utils";
 import { type CSSProperties, useState } from "react";
 import hoodieNap from "./assets/companions/hoodie-nap.png";
+import hoodiePaperboat from "./assets/companions/hoodie-paperboat.png";
 import hoodiePeekaboo from "./assets/companions/hoodie-peekaboo.png";
 import hoodiePlay from "./assets/companions/hoodie-play.png";
 import hoodieRelax from "./assets/companions/hoodie-relax.png";
+import hoodieScarf from "./assets/companions/hoodie-scarf.png";
 import inkyBubbles from "./assets/companions/inky-bubbles.png";
+import inkyCamouflage from "./assets/companions/inky-camouflage.png";
 import inkyCuddle from "./assets/companions/inky-cuddle.png";
 import inkyJuggle from "./assets/companions/inky-juggle.png";
 import inkyLeafplay from "./assets/companions/inky-leafplay.png";
@@ -12,10 +15,15 @@ import inkyNap from "./assets/companions/inky-nap.png";
 import inkyPeekaboo from "./assets/companions/inky-peekaboo.png";
 import inkyPlay from "./assets/companions/inky-play.png";
 import inkyShell from "./assets/companions/inky-shell.png";
+import inkySuction from "./assets/companions/inky-suction.png";
 import pixelBalance from "./assets/companions/pixel-balance.png";
+import pixelFirefly from "./assets/companions/pixel-firefly.png";
+import pixelLens from "./assets/companions/pixel-lens.png";
 import pixelNap from "./assets/companions/pixel-nap.png";
 import pixelPeekaboo from "./assets/companions/pixel-peekaboo.png";
 import pixelPlay from "./assets/companions/pixel-play.png";
+import sproutBloom from "./assets/companions/sprout-bloom.png";
+import sproutDew from "./assets/companions/sprout-dew.png";
 import sproutNap from "./assets/companions/sprout-nap.png";
 import sproutPeekaboo from "./assets/companions/sprout-peekaboo.png";
 import sproutPlay from "./assets/companions/sprout-play.png";
@@ -35,8 +43,56 @@ export type CompanionSpriteAction =
 
 const stories: Record<
 	CompanionScene,
-	{ source: string; offsets: number[]; x: number; scale: string }
+	{ source: string; offsets: number[]; x: number | number[]; scale: string }
 > = {
+	suction: {
+		source: inkySuction,
+		offsets: [-4.13, -4.13, -4.13, -4.13, -0.77, -1.0, -1.0, -1.0],
+		x: [-0.85, -0.85, -0.85, -0.85, 2.67, 2.67, 2.67, 2.67],
+		scale: "0.949, 0.992",
+	},
+	camouflage: {
+		source: inkyCamouflage,
+		offsets: [-1.29, -1.29, -1.52, -1.52, -1.06, -1.29, -1.29, -1.29],
+		x: -0.44,
+		scale: "0.978, 1.018",
+	},
+	bloom: {
+		source: sproutBloom,
+		offsets: [-3.56, -3.56, -3.56, -3.56, -0.97, -0.97, -0.97, -0.97],
+		x: -0.31,
+		scale: "0.997, 1.038",
+	},
+	dew: {
+		source: sproutDew,
+		offsets: [-2.36, -2.6, -2.6, -2.6, 3.44, 3.44, 3.44, 3.44],
+		x: -0.09,
+		scale: "1.014, 1.028",
+	},
+	firefly: {
+		source: pixelFirefly,
+		offsets: [-0.31, -0.31, -0.31, -0.31, 0.59, 0.59, 0.59, 0.59],
+		x: [1.97, 1.97, 1.97, 1.97, -1.77, -1.77, -1.77, -1.77],
+		scale: "0.922, 0.995",
+	},
+	lens: {
+		source: pixelLens,
+		offsets: [0.12, 0.12, 0.12, 0.12, 0.12, 0.12, 0.12, 0.12],
+		x: 0.0,
+		scale: "0.939, 1.002",
+	},
+	scarf: {
+		source: hoodieScarf,
+		offsets: [-2.74, -2.74, -2.74, -2.74, -0.27, -0.5, -0.27, -0.27],
+		x: 0.07,
+		scale: "0.972, 0.991",
+	},
+	paperboat: {
+		source: hoodiePaperboat,
+		offsets: [-3.28, -3.28, -3.5, -3.5, -1.98, -1.98, -1.98, -1.98],
+		x: [-1.83, -1.83, -1.83, -1.83, 3.55, 3.55, 3.55, 3.55],
+		scale: "0.937, 0.963",
+	},
 	relax: {
 		source: hoodieRelax,
 		offsets: [-2.7, -2.48, -4.25, -4.25, 3.51, 3.95, 3.51, -0.04],
@@ -159,7 +215,7 @@ export function CompanionSprite({
 		(story?.offsets ?? offsets[character][sheet]).map((y, i) => [
 			`--sprite-offset-${i}`,
 			story
-				? `translate(${story.x}%, ${y}%) scale(${story.scale})`
+				? `translate(${Array.isArray(story.x) ? story.x[i] : story.x}%, ${y}%) scale(${story.scale})`
 				: i === 7
 					? restingRegistration[character][sheet]
 					: `translate(${sheet === "nap" && i === 4 ? (character === "hoodie" ? -3 : character === "pixel" ? -1.5 : 0) : 0}%, ${y}%)`,
