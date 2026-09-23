@@ -209,6 +209,158 @@ test("authoritative refresh removes absent IDs while newer viewed revision survi
  * is additive, so this asserts the compatibility half as well: a daemon that
  * sends nothing leaves the marker empty and every surface renders as it did.
  */
+test("overlapping catalogue refreshes coalesce and perform one trailing read", async () => {
+	reset();
+	const resolveResponses = [];
+	let firstRequestStarted;
+	let secondRequestStarted;
+	const firstRequest = new Promise((resolve) => {
+		firstRequestStarted = resolve;
+	});
+	const secondRequest = new Promise((resolve) => {
+		secondRequestStarted = resolve;
+	});
+	globalThis.__canonicalRequest = (request) => {
+		calls.push(request);
+		const response = new Promise((resolve) => resolveResponses.push(resolve));
+		if (calls.length === 1) firstRequestStarted();
+		if (calls.length === 2) secondRequestStarted();
+		return response;
+	};
+
+	const first = store.getState().fetchSessions(73);
+	await firstRequest;
+	const burst = [
+		store.getState().fetchSessions(73),
+		store.getState().fetchSessions(73),
+	];
+	assert.equal(calls.length, 1, "a burst shares the active catalogue request");
+	assert.equal(
+		burst.length,
+		2,
+		"both overlapping callers join the same flight",
+	);
+	assert.equal(
+		calls[0].limit,
+		73,
+		"coalescing preserves an explicit page limit",
+	);
+
+	resolveResponses[0]({
+		sessions: [{ id: "stale", name: "stale", mtime: 1 }],
+		truncated: false,
+	});
+	await secondRequest;
+	assert.equal(
+		calls.length,
+		2,
+		"an invalidation during flight starts one trailing read",
+	);
+	assert.equal(
+		calls[1].limit,
+		73,
+		"the trailing read retains the requested page size",
+	);
+	resolveResponses[1]({
+		sessions: [{ id: "fresh", name: "fresh", mtime: 2 }],
+		truncated: true,
+	});
+	await first;
+
+	assert.deepEqual(
+		store.getState().sessions.map((row) => row.session_id),
+		["fresh"],
+		"the stale in-flight page must not replace the trailing answer",
+	);
+	assert.equal(store.getState().truncated, true);
+	assert.equal(store.getState().loading, false);
+	assert.equal(store.getState().error, null);
+});
+
+test("the latest explicit catalogue limit is used by the trailing refresh", async () => {
+	reset();
+	const pending = [];
+	let firstRequestStarted;
+	let trailingStarted;
+	const firstRequest = new Promise((resolve) => {
+		firstRequestStarted = resolve;
+	});
+	const trailingRequest = new Promise((resolve) => {
+		trailingStarted = resolve;
+	});
+	globalThis.__canonicalRequest = (request) => {
+		calls.push(request);
+		const response = new Promise((resolve) => pending.push(resolve));
+		if (calls.length === 1) firstRequestStarted();
+		if (calls.length === 2) trailingStarted();
+		return response;
+	};
+
+	const narrow = store.getState().fetchSessions(31);
+	await firstRequest;
+	const broad = store.getState().fetchSessions(79);
+	assert.deepEqual(
+		calls.map(({ limit }) => limit),
+		[31],
+	);
+	pending[0]({ sessions: [{ id: "stale", name: "stale", mtime: 1 }] });
+	await trailingRequest;
+	assert.deepEqual(
+		calls.map(({ limit }) => limit),
+		[31, 79],
+		"the latest explicit page size applies to the trailing read",
+	);
+	pending[1]({
+		sessions: [{ id: "broad", name: "broad", mtime: 2 }],
+		truncated: true,
+	});
+	await Promise.all([narrow, broad]);
+	assert.deepEqual(
+		store.getState().sessions.map((row) => row.session_id),
+		["broad"],
+	);
+	assert.equal(store.getState().truncated, true);
+});
+
+test("an invalidated catalogue failure is retried without publishing an error", async () => {
+	reset();
+	let rejectFirst;
+	let firstRequestStarted;
+	let trailingStarted;
+	const firstRequest = new Promise((resolve) => {
+		firstRequestStarted = resolve;
+	});
+	const trailingRequest = new Promise((resolve) => {
+		trailingStarted = resolve;
+	});
+	const responses = [];
+	globalThis.__canonicalRequest = (request) => {
+		calls.push(request);
+		if (calls.length === 1) firstRequestStarted();
+		if (calls.length === 1)
+			return new Promise((_, reject) => {
+				rejectFirst = reject;
+			});
+		if (calls.length === 2) trailingStarted();
+		return new Promise((resolve) => responses.push(resolve));
+	};
+
+	const first = store.getState().fetchSessions();
+	await firstRequest;
+	const joined = store.getState().fetchSessions();
+	rejectFirst(new Error("stale read failure"));
+	await trailingRequest;
+	assert.equal(calls.length, 2);
+	assert.equal(store.getState().error, null);
+	responses[0]({ sessions: [{ id: "fresh", name: "fresh", mtime: 2 }] });
+	await Promise.all([first, joined]);
+	assert.equal(store.getState().error, null);
+	assert.deepEqual(
+		store.getState().sessions.map((row) => row.session_id),
+		["fresh"],
+	);
+});
+
 test("the daemon's unread reads are carried, and an absent marker is not an empty store", async () => {
 	reset();
 	globalThis.__canonicalRequest = async () => ({
@@ -4026,13 +4178,21 @@ test("the submit path cannot re-decide what a draft is", async () => {
 	// wrapper still delegates, which is what makes the rename safe rather than a
 	// hole: a `planForDraft` that stopped calling `planFor` would take both call
 	// sites out of the planner's reach while this assertion stayed green.
+	//
+	// The window is 4200, not 400 (remediation round 1, Q1). The property this
+	// pins is unchanged — the wrapper still delegates to `planFor(draft, at)` —
+	// but the held-press branch and its comment block now sit between the
+	// `useCallback(` and the call, so the first `planFor(draft, at)` moved past
+	// the old window (measured comment-stripped: 424 chars on the base, 536 on
+	// the head that added the branch). The distance is not the invariant; the
+	// delegation is.
 	const plans = composer.match(/planForDraft\(newMessage, caret\)/g) ?? [];
 	assert.ok(
 		plans.length >= 2,
 		`expected the plan to be consulted from both Enter and the form submit, found ${plans.length} call site(s)`,
 	);
 	assert.ok(
-		/const planForDraft = useCallback\([\s\S]{0,400}?planFor\(draft, at\)/.test(
+		/const planForDraft = useCallback\([\s\S]{0,4200}?planFor\(draft, at\)/.test(
 			composer,
 		),
 		"`planForDraft` no longer delegates to `planFor`, so the two submit entry points consult an exception with no planner behind it",

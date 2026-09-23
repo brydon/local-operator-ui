@@ -3446,8 +3446,94 @@ export const STORIES = [
 	["onboarding-onboardingmodal--create-agent", 1280, 900],
 	["onboarding-onboardingmodal--congratulations", 1280, 900],
 
-	/* 1380x800 is what the story declares and what the app window ships. */
-	["installer-installercontent--default", 1380, 800],
+	/*
+	 * Onboarding step 1 -- "Connect a provider" -- and the Settings column that
+	 * renders the same grid, from `provider-setup.stories.tsx`.
+	 *
+	 * WHY THESE EXIST BESIDE THE `onboarding-onboardingmodal--default` ROW ABOVE,
+	 * which is the same step: that story renders the flow with no backend, so its
+	 * grid is the loading branch, and the frames committed under it were taken
+	 * before the registry grid existed at all (they paint the "Choose your
+	 * setup" two-gate screen that #87 replaced). Neither could be used to judge
+	 * the screen this step actually shows, which is a grid of 18 registry rows.
+	 *
+	 * The widths are the CONTAINERS the grid is handed rather than the window,
+	 * because that is what decides its column count: 1000 puts the 896px Settings
+	 * column (`max-w-4xl`) at its real measure, 600 is below every width the app
+	 * can produce and shows the one-column floor, and the two `in-dialog` rows are
+	 * the app's default window and its 800px floor. `--themes=localOperator*` is
+	 * how a narrowed run is taken; the sweep covers all twelve.
+	 *
+	 * The two `dir` entries are the promoted card's hover and focus states, and
+	 * they are entries rather than stories because both are BROWSER state the rig
+	 * has to produce with real input: `hover` moves a real pointer and `tabTo`
+	 * presses real Tabs until the card holds focus, so the frame carries `:hover`
+	 * and `:focus-visible` as the product draws them. A story that set either one
+	 * in a class would photograph the story.
+	 */
+	["onboarding-providersetup--settings-column", 1000, 1100],
+	["onboarding-providersetup--signed-in", 1000, 1100],
+	["onboarding-providersetup--short-registry", 1000, 700],
+	["onboarding-providersetup--search-active", 1000, 900],
+	["onboarding-providersetup--search-recommended", 1000, 900],
+	["onboarding-providersetup--search-no-results", 1000, 760],
+	["onboarding-providersetup--narrow-column", 600, 1100],
+	/*
+	 * Three WINDOWS for one story, because the panel's measure is clamped against
+	 * the viewport: 1280 is the app's default, 800x600 is its declared floor
+	 * (`WINDOW_MIN_WIDTH` / `WINDOW_MIN_HEIGHT`) where the clamp and the height cap
+	 * both bite, and the fourth entry is the same 1280x900 window with the body
+	 * parked at the end of the list -- a state no frame covered, and the one where
+	 * "the field scrolls away with the content" can be seen rather than argued.
+	 */
+	["onboarding-providersetup--in-dialog", 1280, 900],
+	["onboarding-providersetup--in-dialog", 800, 600],
+	[
+		"onboarding-providersetup--in-dialog",
+		1280,
+		900,
+		{
+			dir: "in-dialog-scrolled",
+			scrollToEnd: "[role=dialog] > div:nth-of-type(2)",
+		},
+	],
+	[
+		"onboarding-providersetup--settings-column",
+		1000,
+		1100,
+		{ dir: "card-hovered", hover: '[data-provider-id="radient"]' },
+	],
+	[
+		"onboarding-providersetup--settings-column",
+		1000,
+		1100,
+		/*
+		 * `> button` because the hook is on the ROW: the element a keyboard user
+		 * reaches is the card inside it, which is what `tabTo` asserts.
+		 */
+		{
+			dir: "card-focused",
+			tabTo: '[data-provider-id="radient"] > button',
+		},
+	],
+
+	/* 640x480 is what the story declares and what the app window ships, and the
+	   test beside `install-install-progress.test.mjs` reads those two numbers
+	   against this tuple so a third copy of the size cannot drift again (design
+	   D15 - a story at one size while the window said another is exactly what the
+	   1380x800 set was). SIX states, because a user can be left in six: the
+	   mounted entry, an indeterminate first frame, the long download, a failure
+	   with a recognised cause, a failure WITHOUT one (the composition the code
+	   calls the common case, whose only specific line is the machine one below the
+	   sentence - design D12), and the settled panel. One frame of DEFAULT was all
+	   this surface had, which is why the failure state could have shipped as a
+	   dialog nobody had looked at. */
+	["installer-installercontent--default", 640, 480],
+	["installer-installercontent--indeterminate", 640, 480],
+	["installer-installercontent--mid-install", 640, 480],
+	["installer-installercontent--failure", 640, 480],
+	["installer-installercontent--failure-fallback", 640, 480],
+	["installer-installercontent--installed", 640, 480],
 	/* The transcript's top slot. Its whole claim is that it does not change
 	   height, which is a COMPARISON between states — so the boards stack the
 	   states between rules rather than showing one per frame. `app-minimum-width`
