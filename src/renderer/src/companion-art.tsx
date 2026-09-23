@@ -89,7 +89,6 @@ type MouthShape =
 	| "grin"
 	| "cat"
 	| "oh"
-	| "smirk"
 	| "pout"
 	| "none"
 	| "flat"
@@ -115,7 +114,13 @@ interface FaceBeat {
 }
 
 const faceBeats: FaceBeat[] = [
-	{ name: "warm", eyes: ["round", "round"], mouth: "smile", attentive: true },
+	{
+		name: "warm",
+		eyes: ["round", "round"],
+		mouth: "smile",
+		attentive: true,
+		duration: 4200,
+	},
 	{
 		name: "caret joy",
 		eyes: ["caret", "caret"],
@@ -124,17 +129,17 @@ const faceBeats: FaceBeat[] = [
 	},
 	{
 		name: "left wink",
-		eyes: ["line", "round"],
-		mouth: "smirk",
-		brows: [1, -2],
-		duration: 1900,
-		attentive: true,
+		eyes: ["arch", "round"],
+		mouth: "slight smile",
+		duration: 1200,
+		weight: 1.25,
+		settle: true,
 	},
 	{
 		name: "content",
-		eyes: ["line", "line"],
-		mouth: "smile",
-		duration: 2600,
+		eyes: ["closed", "closed"],
+		mouth: "slight smile",
+		duration: 3800,
 		attentive: true,
 	},
 	{
@@ -147,12 +152,13 @@ const faceBeats: FaceBeat[] = [
 	},
 	{
 		name: "curious",
-		eyes: ["round", "small"],
-		mouth: "smile",
-		openness: [1.15, 0.9],
-		brows: [-3, 2],
-		glance: [-3, -1],
+		eyes: ["round", "round"],
+		mouth: "slight smile",
+		openness: [1.08, 1],
+		brows: [-1, 0],
+		glance: [-1, -0.5],
 		attentive: true,
+		duration: 3600,
 	},
 	{
 		name: "beaming",
@@ -163,11 +169,11 @@ const faceBeats: FaceBeat[] = [
 	},
 	{
 		name: "right wink",
-		eyes: ["round", "line"],
-		mouth: "smile",
-		brows: [-2, 1],
-		duration: 1900,
-		attentive: true,
+		eyes: ["round", "arch"],
+		mouth: "slight smile",
+		duration: 1200,
+		weight: 1.25,
+		settle: true,
 	},
 	{
 		name: "starry",
@@ -186,12 +192,13 @@ const faceBeats: FaceBeat[] = [
 	},
 	{
 		name: "skeptical",
-		eyes: ["line", "ring"],
-		mouth: "smirk",
-		brows: [2, -3],
-		glance: [3, 0],
+		eyes: ["round", "round"],
+		mouth: "none",
+		brows: [0, -1],
+		glance: [1, 0],
 		duration: 1500,
 		weight: 1,
+		settle: true,
 	},
 	{
 		name: "cat smile",
@@ -225,12 +232,12 @@ const faceBeats: FaceBeat[] = [
 	},
 	{
 		name: "goofy",
-		eyes: ["round", "round"],
-		mouth: "smirk",
-		openness: [0.45, 1.15],
-		brows: [2, -3],
-		glance: [3, -1],
-		duration: 2200,
+		eyes: ["round", "small"],
+		mouth: "smile",
+		glance: [1, 0],
+		duration: 1400,
+		weight: 1,
+		settle: true,
 	},
 	{
 		name: "giggle",
@@ -249,17 +256,19 @@ const faceBeats: FaceBeat[] = [
 	{
 		name: "twinkle",
 		eyes: ["star", "round"],
-		mouth: "smirk",
+		mouth: "slight smile",
 		duration: 1900,
 		weight: 2,
+		settle: true,
 	},
 	{
 		name: "proud",
 		eyes: ["round", "round"],
-		mouth: "smirk",
-		openness: [0.55, 0.55],
-		brows: [-1, -1],
+		mouth: "slight smile",
+		openness: [1, 1],
 		attentive: true,
+		cheeks: true,
+		duration: 3800,
 	},
 	{
 		name: "puzzled",
@@ -272,10 +281,10 @@ const faceBeats: FaceBeat[] = [
 	},
 	{
 		name: "soft smile",
-		eyes: ["round", "arch"],
-		mouth: "smile",
-		openness: [0.85, 1],
-		duration: 2900,
+		eyes: ["round", "round"],
+		mouth: "slight smile",
+		openness: [0.95, 0.95],
+		duration: 4200,
 		attentive: true,
 	},
 	{
@@ -306,33 +315,34 @@ const faceBeats: FaceBeat[] = [
 	},
 	{
 		name: "mischievous",
-		eyes: ["caret", "line"],
-		mouth: "smirk",
-		brows: [-2, 1],
-		duration: 2300,
+		eyes: ["caret", "round"],
+		mouth: "smile",
+		duration: 1400,
+		weight: 1,
+		settle: true,
 	},
 	{
 		name: "quiet",
 		eyes: ["round", "round"],
 		mouth: "none",
-		openness: [0.9, 0.9],
-		duration: 3000,
+		openness: [1, 1],
+		duration: 4600,
 		attentive: true,
 	},
 	{
 		name: "neutral",
 		eyes: ["round", "round"],
 		mouth: "flat",
-		openness: [0.8, 0.85],
-		duration: 2700,
+		openness: [1, 1],
+		duration: 4000,
 		attentive: true,
 	},
 	{
 		name: "little smile",
 		eyes: ["round", "round"],
 		mouth: "slight smile",
-		openness: [0.9, 0.85],
-		duration: 3200,
+		openness: [1, 1],
+		duration: 4400,
 		attentive: true,
 	},
 	{
@@ -346,10 +356,9 @@ const faceBeats: FaceBeat[] = [
 	},
 	{
 		name: "whistling",
-		eyes: ["closed", "round"],
+		eyes: ["closed", "closed"],
 		mouth: "whistle",
-		openness: [1, 0.6],
-		glance: [2, -1],
+		glance: [1, 0],
 		duration: 2700,
 		weight: 2,
 	},
@@ -373,9 +382,8 @@ const faceBeats: FaceBeat[] = [
 	},
 	{
 		name: "cheeky wink",
-		eyes: ["line", "round"],
+		eyes: ["arch", "round"],
 		mouth: "side tongue",
-		brows: [1, -2],
 		cheeks: true,
 		duration: 1400,
 		weight: 0.75,
@@ -393,13 +401,13 @@ const faceBeats: FaceBeat[] = [
 	},
 	{
 		name: "one brow up",
-		eyes: ["round", "small"],
+		eyes: ["round", "round"],
 		mouth: "slight smile",
-		openness: [0.8, 1.05],
-		brows: [3, -5],
+		openness: [1, 1.05],
+		brows: [0, -2],
 		glance: [-1, 0],
 		duration: 1600,
-		weight: 1.5,
+		weight: 1,
 		settle: true,
 	},
 	{
@@ -425,7 +433,7 @@ const faceHabits: Record<
 			"content",
 			"dreamy",
 			"whistling",
-			"one brow up",
+			"little smile",
 		],
 		after: {
 			curious: ["beaming", "amazed"],
@@ -439,8 +447,8 @@ const faceHabits: Record<
 		favorites: [
 			"bashful",
 			"soft smile",
-			"right wink",
-			"sheepish",
+			"warm",
+			"content",
 			"little smile",
 			"shy nibble",
 		],
@@ -464,17 +472,17 @@ const faceHabits: Record<
 	},
 	pixel: {
 		favorites: [
-			"mischievous",
-			"goofy",
-			"proud",
-			"left wink",
-			"cat smile",
-			"cheeky wink",
+			"warm",
+			"curious",
+			"caret joy",
+			"tiny happy",
+			"little smile",
+			"blep",
 		],
 		after: {
 			puzzled: ["goofy"],
-			goofy: ["proud", "giggle"],
-			mischievous: ["left wink"],
+			goofy: ["warm", "little smile"],
+			mischievous: ["content", "little smile"],
 			"left wink": ["cat smile"],
 			"cheeky wink": ["proud", "cat smile"],
 		},
@@ -486,16 +494,18 @@ function useFaceAnimation(
 	character: BuiltinCompanionCharacter,
 	listening: boolean,
 ) {
-	const seed =
-		character === "sprout"
-			? 0
-			: character === "hoodie"
-				? 7
+	const seed = faceBeats.findIndex(
+		(beat) =>
+			beat.name ===
+			(character === "hoodie"
+				? "little smile"
 				: character === "inky"
-					? 5
-					: 11;
+					? "soft smile"
+					: "warm"),
+	);
 	const [index, setIndex] = useState(seed);
 	const [paused, setPaused] = useState(false);
+	const [changing, setChanging] = useState(false);
 	const cursor = useRef(seed);
 	const recent = useRef([seed]);
 	useEffect(() => {
@@ -528,7 +538,8 @@ function useFaceAnimation(
 					const pool = phrase.length && Math.random() > 0.4 ? phrase : choices;
 					const weight = (beat: FaceBeat) =>
 						(beat.weight ?? 4) *
-						(habits.favorites.includes(beat.name) ? 1.7 : 1);
+						(habits.favorites.includes(beat.name) ? 1.7 : 1) *
+						(beat.attentive ? 2 : 1);
 					let draw =
 						Math.random() *
 						pool.reduce((sum, { beat }) => sum + weight(beat), 0);
@@ -537,16 +548,21 @@ function useFaceAnimation(
 							draw -= weight(beat);
 							return draw < 0;
 						}) ?? pool[0];
-					cursor.current = next.i;
-					recent.current = [...recent.current.slice(-3), next.i];
-					setIndex(next.i);
-					schedule();
+					setChanging(true);
+					timer = window.setTimeout(() => {
+						cursor.current = next.i;
+						recent.current = [...recent.current.slice(-3), next.i];
+						setIndex(next.i);
+						setChanging(false);
+						schedule();
+					}, 100);
 				},
-				(faceBeats[cursor.current].duration ?? 2800) * (listening ? 2 : 1),
+				(faceBeats[cursor.current].duration ?? 3400) * (listening ? 2 : 1),
 			);
 		};
 		const refresh = () => {
 			window.clearTimeout(timer);
+			setChanging(false);
 			const stopped = document.hidden || motion.matches;
 			setPaused(stopped);
 			if (
@@ -568,7 +584,7 @@ function useFaceAnimation(
 			motion.removeEventListener("change", refresh);
 		};
 	}, [enabled, listening, seed, character]);
-	return { beat: faceBeats[index], index, paused };
+	return { beat: faceBeats[index], index, paused, changing };
 }
 
 function FaceEye({
@@ -653,11 +669,10 @@ function LivelyFace({
 		"side tongue": ["M37 52q13 12 27-3", "M37 52v5h13v-3h9v-5h5"],
 		puff: ["M45 53q5-5 10 0q-5 5-10 0Z", "M46 51h8v4h-8Z"],
 		bite: ["M38 53q9 10 21 0m-10 3v-5h7v5Z", "M38 53v5h11v-7h7v7h3v-5"],
-		smile: ["M36 50q14 18 28 0", "M36 50v6h6v4h16v-4h6v-6"],
+		smile: ["M39 51q11 13 22 0", "M39 51v4h5v3h12v-3h5v-4"],
 		grin: ["M35 48h30q-2 17-15 17T35 48Z", "M35 49h30v8h-5v6H40v-6h-5Z"],
 		cat: ["M35 50q7 14 15 3q8 11 15-3", "M35 50v6h10v-4h10v4h10v-6"],
 		oh: ["M45 56a5 7 0 1 0 10 0a5 7 0 1 0-10 0", "M45 49h10v14H45Z"],
-		smirk: ["M36 53q16 13 29-5", "M36 54h6v5h12v-5h6v-5h5"],
 		pout: ["M40 59q10-13 20 0", "M40 59v-5h5v-4h10v4h5v5"],
 	};
 	const style = {
@@ -672,6 +687,7 @@ function LivelyFace({
 		<g
 			className={cn("companion-art-live-face")}
 			data-emotion={beat.name}
+			data-brows={Boolean(beat.brows) || undefined}
 			style={style}
 		>
 			<g className={cn("companion-art-live-brows")}>
@@ -685,7 +701,7 @@ function LivelyFace({
 				/>
 			</g>
 			<g className={cn("companion-art-eyes")}>
-				<g key={beat.name} className={cn("companion-art-face-arrive")}>
+				<g className={cn("companion-art-face-arrive")}>
 					<g className={cn("companion-art-eye-left")}>
 						<FaceEye shape={beat.eyes[0]} pixels={pixels} />
 					</g>
@@ -746,7 +762,7 @@ const eyePaths = {
 	],
 };
 const eyeRects = {
-	working: { x: 18, y: 26, width: 18, height: 10, rx: 4 },
+	working: { x: 19, y: 20, width: 16, height: 20, rx: 8 },
 	attention: { x: 19, y: 17, width: 16, height: 24, rx: 8 },
 	curious: { x: 18, y: 12, width: 18, height: 29, rx: 8 },
 	idle: { x: 19, y: 16, width: 16, height: 25, rx: 8 },
@@ -886,7 +902,7 @@ function Eyes({ mood, pixels, reaction }: ExpressionProps) {
 					className={cn("companion-art-task-brows")}
 					d={
 						mood === "working"
-							? "M17 17l19 4m28 0 19-4"
+							? "M19 12q8-2 16 0m30 0q8-2 16 0"
 							: "M17 9q10-7 19 0m28 0q10-7 19 0"
 					}
 				/>
@@ -1137,6 +1153,7 @@ export function CompanionArt({
 			data-story={(sprite && story !== undefined) || undefined}
 			data-celebrating={celebrating || undefined}
 			data-face-beat={lively ? face.index : undefined}
+			data-face-changing={(lively && face.changing) || undefined}
 			data-paused={face.paused || undefined}
 			style={tracking}
 		>

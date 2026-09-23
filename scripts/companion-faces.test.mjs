@@ -99,12 +99,20 @@ async function fixture(callback, { hidden = false, reduced = false } = {}) {
 			motion.matches = value;
 			motion.dispatchEvent(new dom.window.Event("change"));
 		});
-	const step = async () => {
+	const tick = async () => {
 		assert.equal(timers.size, 1, "one face timer is active");
 		const [id, timer] = timers.entries().next().value;
 		timers.delete(id);
 		await act(() => timer.callback());
 		return emotion();
+	};
+	const step = async () => {
+		await tick();
+		assert.equal(
+			host.querySelector(".companion-art").dataset.faceChanging,
+			"true",
+		);
+		return tick();
 	};
 	await render();
 	try {
@@ -112,6 +120,8 @@ async function fixture(callback, { hidden = false, reduced = false } = {}) {
 			render,
 			emotion,
 			step,
+			tick,
+			host,
 			visibility,
 			reduceMotion,
 			draw: (value) => {
@@ -129,6 +139,10 @@ async function fixture(callback, { hidden = false, reduced = false } = {}) {
 }
 
 const silly = new Set([
+	"left wink",
+	"right wink",
+	"goofy",
+	"mischievous",
 	"blep",
 	"cross-eyed glance",
 	"cheeky wink",
@@ -161,10 +175,8 @@ const subdued = new Set([
 ]);
 const attentive = new Set([
 	"warm",
-	"left wink",
 	"content",
 	"curious",
-	"right wink",
 	"cat smile",
 	"proud",
 	"soft smile",
@@ -181,8 +193,13 @@ test("a varied, mostly cheerful cycle bridges brief special faces with everyday 
 			const recent = [emotion()];
 			let subduedCount = 0;
 			let sillyCount = 0;
+			let attentiveTime = 0;
+			let totalTime = 0;
 			for (let i = 0; i < 1600; i++) {
 				const previous = emotion();
+				const held = timers.values().next().value.delay;
+				totalTime += held;
+				if (attentive.has(previous)) attentiveTime += held;
 				if (uncommon.has(previous))
 					assert.ok(timers.values().next().value.delay <= 2800);
 				if (silly.has(previous))
@@ -210,7 +227,11 @@ test("a varied, mostly cheerful cycle bridges brief special faces with everyday 
 				seen.has("adoring") && seen.has("caret joy") && seen.has("starry"),
 			);
 			assert.ok(subduedCount < 192, "non-cheerful beats stay a small minority");
-			assert.ok(sillyCount < 160, "silly faces are occasional surprises");
+			assert.ok(sillyCount < 240, "silly faces are occasional surprises");
+			assert.ok(
+				attentiveTime / totalTime > 0.6,
+				"most idle time is spent in gentle everyday faces",
+			);
 		});
 });
 
@@ -262,7 +283,7 @@ test("touch and task interruptions resume variety instead of resetting the face"
 		}
 		assert.notEqual(await step(), before);
 		await render({ character: "hoodie" });
-		assert.equal(emotion(), "right wink");
+		assert.equal(emotion(), "little smile");
 		assert.equal(timers.size, 1);
 	});
 });
@@ -335,4 +356,47 @@ test("pickup artwork readiness belongs to the loaded character", async () => {
 			assert.equal(art.dataset.motionReady, "true");
 		}
 	});
+});
+
+test("expression changes blink first and interrupted blinks reopen without a stale swap", async () => {
+	await fixture(
+		async ({ emotion, step, tick, host, render, visibility, reduceMotion }) => {
+			const changing = () =>
+				host.querySelector(".companion-art").dataset.faceChanging;
+			const eyes = host.querySelector(".companion-art-face-arrive");
+			const before = emotion();
+			await tick();
+			assert.equal(
+				emotion(),
+				before,
+				"old expression stays through eyelid closure",
+			);
+			assert.equal(changing(), "true");
+			assert.equal(timers.values().next().value.delay, 100);
+			await tick();
+			assert.notEqual(emotion(), before);
+			assert.equal(changing(), undefined);
+			assert.equal(
+				host.querySelector(".companion-art-face-arrive"),
+				eyes,
+				"eye transitions preserve their DOM node",
+			);
+			for (const pause of [
+				() => visibility(true),
+				() => reduceMotion(true),
+				() => render({ reaction: "grabbed" }),
+			]) {
+				await tick();
+				assert.equal(changing(), "true");
+				await pause();
+				assert.equal(changing(), undefined);
+				assert.equal(timers.size, 0);
+				await visibility(false);
+				await reduceMotion(false);
+				await render({ reaction: "rest" });
+				assert.equal(changing(), undefined);
+				await step();
+			}
+		},
+	);
 });
