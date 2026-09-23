@@ -13,6 +13,7 @@ export interface CompanionState {
 	mood: CompanionMood;
 	label: string;
 	sessionId: string | null;
+	taskTitle?: string;
 }
 
 export const COMPANION_OFFLINE: CompanionState = {
@@ -88,6 +89,8 @@ export function companionStateFromCatalogue(body: unknown): CompanionState {
 		} else continue;
 		if (rank > priority) {
 			winner = state;
+			if (typeof row.name === "string" && row.name.trim())
+				winner.taskTitle = row.name.replace(/\s+/g, " ").trim().slice(0, 160);
 			priority = rank;
 		}
 	}

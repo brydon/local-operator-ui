@@ -48,6 +48,7 @@ const SAVED_NAME = /^custom-[a-f0-9]{32}\.json$/;
 const PNG_EXTENSION = /\.png$/i;
 const CONTROL_CHARACTERS = /\p{Cc}/u;
 const NAME_SEPARATORS = /[\p{Cc}\s_-]+/gu;
+const PNG_CHUNK_TYPE = /^[A-Za-z]{2}[A-Z][A-Za-z]$/;
 
 interface StoredPack {
 	version: 1;
@@ -100,7 +101,7 @@ function readBounded(path: string, limit: number): Buffer {
 	}
 }
 
-function validatePng(bytes: Buffer): void {
+function validatePng(bytes: Buffer, decode: boolean): void {
 	const invalid = () => new Error("Each pose must be a valid PNG image.");
 	if (
 		bytes.length > MAX_IMAGE_BYTES ||
@@ -139,22 +140,56 @@ function validatePng(bytes: Buffer): void {
 	const { channels } = formats[color];
 	const interlaced = bytes[28] === 1;
 	let ended = false;
+	let palette = 0;
+	let transparency = false;
+	let dataEnded = false;
 	const compressed: Buffer[] = [];
 	for (let offset = 8; offset < bytes.length; ) {
 		if (offset + 12 > bytes.length) throw invalid();
 		const length = bytes.readUInt32BE(offset);
 		const end = offset + 12 + length;
 		if (end > bytes.length) throw invalid();
-		const type = bytes.toString("ascii", offset + 4, offset + 8);
+		const type = bytes.toString("latin1", offset + 4, offset + 8);
 		const payload = bytes.subarray(offset + 8, end - 4);
 		if (
+			!PNG_CHUNK_TYPE.test(type) ||
 			crc32(bytes.subarray(offset + 4, end - 4)) !== bytes.readUInt32BE(end - 4)
 		) {
 			throw invalid();
 		}
 		if (type === "IHDR" && offset !== 8) throw invalid();
 		if (type === "IDAT") {
+			if (dataEnded || (color === 3 && !palette)) throw invalid();
 			compressed.push(payload);
+		} else if (compressed.length) {
+			dataEnded = true;
+		}
+		if (type === "PLTE") {
+			if (
+				palette ||
+				transparency ||
+				compressed.length ||
+				color === 0 ||
+				color === 4 ||
+				!length ||
+				length % 3 ||
+				length > 768 ||
+				(color === 3 && length / 3 > 2 ** depth)
+			)
+				throw invalid();
+			palette = length / 3;
+		} else if (type === "tRNS") {
+			if (
+				transparency ||
+				compressed.length ||
+				(color === 0
+					? length !== 2
+					: color === 2
+						? length !== 6
+						: color !== 3 || !length || length > palette)
+			)
+				throw invalid();
+			transparency = true;
 		} else if (type === "IEND") {
 			if (length || end !== bytes.length || !compressed.length) throw invalid();
 			ended = true;
@@ -162,10 +197,17 @@ function validatePng(bytes: Buffer): void {
 			throw new Error(
 				"Use still PNG poses; animated PNG files are not supported.",
 			);
+		} else if (
+			type !== "IHDR" &&
+			type !== "IDAT" &&
+			!(bytes[offset + 4] & 32)
+		) {
+			throw invalid();
 		}
 		offset = end;
 	}
 	if (!ended) throw invalid();
+	if (!decode) return;
 	let pixels: Buffer;
 	try {
 		pixels = inflateSync(Buffer.concat(compressed), {
@@ -202,6 +244,7 @@ function validatePng(bytes: Buffer): void {
 function normalizePack(
 	value: unknown,
 	readFrame: (path: string) => Buffer,
+	decode = true,
 ): StoredPack {
 	const pack = object(value);
 	if (
@@ -241,7 +284,7 @@ function normalizePack(
 		if (typeof sources[pose] !== "string")
 			throw new Error("Each pose must name a PNG file.");
 		const bytes = readFrame(sources[pose]);
-		validatePng(bytes);
+		validatePng(bytes, decode);
 		frames[pose] = PNG_PREFIX + bytes.toString("base64");
 	}
 	return {
@@ -265,8 +308,27 @@ function appearance(id: string, pack: StoredPack): CompanionAppearance {
 	};
 }
 
+function readPack(path: string, decode: boolean): StoredPack {
+	return normalizePack(
+		JSON.parse(readBounded(path, MAX_SAVED_BYTES).toString("utf8")),
+		(source) => {
+			if (
+				source.length >
+				PNG_PREFIX.length + 4 * Math.ceil(MAX_IMAGE_BYTES / 3)
+			)
+				throw new Error("Invalid saved PNG pose.");
+			const bytes = Buffer.from(source.slice(PNG_PREFIX.length), "base64");
+			if (source !== PNG_PREFIX + bytes.toString("base64"))
+				throw new Error("Invalid saved PNG pose.");
+			return bytes;
+		},
+		decode,
+	);
+}
+
 export class CompanionSkinLibrary {
-	private readonly packs = new Map<string, StoredPack>();
+	private readonly packs = new Map<string, string>();
+	private cached: { id: string; pack: StoredPack } | null = null;
 
 	constructor(private readonly directory: string) {
 		let names: string[];
@@ -279,30 +341,10 @@ export class CompanionSkinLibrary {
 		}
 		for (const name of names.slice(0, MAX_PACKS)) {
 			try {
-				const pack = normalizePack(
-					JSON.parse(
-						readBounded(join(directory, name), MAX_SAVED_BYTES).toString(
-							"utf8",
-						),
-					),
-					(source) => {
-						if (
-							source.length >
-							PNG_PREFIX.length + 4 * Math.ceil(MAX_IMAGE_BYTES / 3)
-						)
-							throw new Error("Invalid saved PNG pose.");
-						const bytes = Buffer.from(
-							source.slice(PNG_PREFIX.length),
-							"base64",
-						);
-						if (source !== PNG_PREFIX + bytes.toString("base64"))
-							throw new Error("Invalid saved PNG pose.");
-						return bytes;
-					},
-				);
+				const pack = readPack(join(directory, name), false);
 				const id = identifier(pack);
 				if (name !== `${id}.json`) continue;
-				this.packs.set(id, pack);
+				this.packs.set(id, pack.name);
 			} catch {
 				// A damaged custom pack must not prevent built-in companions from loading.
 			}
@@ -312,8 +354,8 @@ export class CompanionSkinLibrary {
 	list(): Array<{ id: string; name: string }> {
 		return [
 			...BUILTIN_COMPANIONS.map(({ id, name }) => ({ id, name })),
-			...Array.from(this.packs, ([id, pack]) => ({ id, name: pack.name })).sort(
-				(a, b) => a.name.localeCompare(b.name),
+			...Array.from(this.packs, ([id, name]) => ({ id, name })).sort((a, b) =>
+				a.name.localeCompare(b.name),
 			),
 		];
 	}
@@ -321,11 +363,42 @@ export class CompanionSkinLibrary {
 	get(id: string): CompanionAppearance | null {
 		const builtin = BUILTIN_COMPANIONS.find((item) => item.id === id);
 		if (builtin) return { ...builtin };
-		const pack = this.packs.get(id);
-		return pack ? appearance(id, pack) : null;
+		if (!this.packs.has(id)) return null;
+		if (this.cached?.id === id) return appearance(id, this.cached.pack);
+		try {
+			const pack = readPack(join(this.directory, `${id}.json`), true);
+			if (identifier(pack) !== id)
+				throw new Error("Companion artwork changed.");
+			this.cached = { id, pack };
+			return appearance(id, pack);
+		} catch {
+			this.packs.delete(id);
+			return null;
+		}
 	}
 
-	import(manifestPath: string): CompanionAppearance {
+	remove(id: string): boolean {
+		if (!this.packs.has(id)) return false;
+		try {
+			unlinkSync(join(this.directory, `${id}.json`));
+		} catch (error) {
+			if (
+				!(error instanceof Error && "code" in error && error.code === "ENOENT")
+			) {
+				throw new Error(
+					"Could not remove this companion from the app's library.",
+				);
+			}
+		}
+		this.packs.delete(id);
+		if (this.cached?.id === id) this.cached = null;
+		return true;
+	}
+
+	import(manifestPath: string, replaceId?: string): CompanionAppearance {
+		if (replaceId !== undefined && !this.packs.has(replaceId)) {
+			throw new Error("Choose a custom companion to replace.");
+		}
 		let pack: StoredPack;
 		try {
 			const root = realpathSync(dirname(resolve(manifestPath)));
@@ -378,7 +451,8 @@ export class CompanionSkinLibrary {
 			throw error;
 		}
 		const id = identifier(pack);
-		if (!this.packs.has(id) && this.packs.size >= MAX_PACKS) {
+		const exists = this.packs.has(id);
+		if (!exists && !replaceId && this.packs.size >= MAX_PACKS) {
 			throw new Error("The companion library is full (64 custom companions).");
 		}
 		const temp = join(this.directory, `.${randomUUID()}.tmp`);
@@ -386,6 +460,14 @@ export class CompanionSkinLibrary {
 			mkdirSync(this.directory, { recursive: true, mode: 0o700 });
 			writeFileSync(temp, JSON.stringify(pack), { mode: 0o600, flag: "wx" });
 			renameSync(temp, join(this.directory, `${id}.json`));
+			if (replaceId && replaceId !== id) {
+				try {
+					this.remove(replaceId);
+				} catch (error) {
+					if (!exists) unlinkSync(join(this.directory, `${id}.json`));
+					throw error;
+				}
+			}
 		} catch {
 			throw new Error(
 				"Could not save this companion to the app's companion library.",
@@ -397,7 +479,8 @@ export class CompanionSkinLibrary {
 				/* Atomic rename already removed the temporary file. */
 			}
 		}
-		this.packs.set(id, pack);
+		this.packs.set(id, pack.name);
+		this.cached = { id, pack };
 		return appearance(id, pack);
 	}
 }

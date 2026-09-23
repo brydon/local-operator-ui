@@ -6,15 +6,17 @@ import {
 	mkdtempSync,
 	readFileSync,
 	readdirSync,
+	renameSync,
 	rmSync,
 	statSync,
 	symlinkSync,
 	writeFileSync,
 } from "node:fs";
+import { syncBuiltinESMExports } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { crc32, deflateSync } from "node:zlib";
+import zlib, { crc32, deflateSync } from "node:zlib";
 import { build } from "esbuild";
 
 const bundle = await build({
@@ -39,6 +41,9 @@ const PNG_ERROR = /valid PNG/;
 const ANIMATED_ERROR = /animated PNG/;
 const SAVE_ERROR = /Could not save/;
 const REGULAR_FILE_ERROR = /not a regular file/;
+const REMOVE_ERROR = /Could not remove/;
+const REPLACE_ERROR = /custom companion to replace/;
+const FULL_ERROR = /library is full/;
 
 function chunk(type, payload) {
 	const buffer = Buffer.alloc(payload.length + 12);
@@ -324,6 +329,14 @@ test("PNG validation rejects wrong signatures, corrupt chunks and invalid scanli
 test("valid grayscale, 16-bit and interlaced PNG scanlines are accepted", (t) => {
 	const f = fixture(t);
 	for (const bytes of [
+		png({
+			header: { color: 3 },
+			pixels: Buffer.alloc(6),
+			extra: [
+				chunk("PLTE", Buffer.alloc(6)),
+				chunk("tRNS", Buffer.from([0, 255])),
+			],
+		}),
 		png({ header: { color: 0, depth: 1 }, pixels: Buffer.alloc(4) }),
 		png({ header: { color: 6, depth: 16 }, pixels: Buffer.alloc(34) }),
 		png({ header: { interlace: 1 }, pixels: Buffer.alloc(19) }),
@@ -331,6 +344,63 @@ test("valid grayscale, 16-bit and interlaced PNG scanlines are accepted", (t) =>
 		writeFileSync(join(f.source, "idle.png"), bytes);
 		assert.ok(f.library.import(f.manifest));
 	}
+});
+
+test("CRC-correct invalid palettes and unknown critical chunks are rejected", (t) => {
+	const f = fixture(t);
+	const indexed = (extra) =>
+		png({ header: { color: 3 }, pixels: Buffer.alloc(6), extra });
+	for (const bytes of [
+		indexed([chunk("PLTE", Buffer.alloc(1))]),
+		indexed([chunk("PLTE", Buffer.alloc(257 * 3))]),
+		indexed([]),
+		indexed([chunk("PLTE", Buffer.alloc(3)), chunk("PLTE", Buffer.alloc(3))]),
+		png({ extra: [chunk("CRIT", Buffer.alloc(0))] }),
+		png({ extra: [chunk("tRNS", Buffer.alloc(1))] }),
+	]) {
+		writeFileSync(join(f.source, "idle.png"), bytes);
+		assert.throws(() => f.library.import(f.manifest), PNG_ERROR);
+	}
+	assert.equal(f.library.list().length, 3);
+});
+
+test("inactive packs are not inflated and selected artwork is cached", (t) => {
+	const f = fixture(t);
+	const first = f.library.import(f.manifest);
+	const second = f.library.import(f.write({ name: "Moss" }));
+	const inflate = t.mock.method(zlib, "inflateSync");
+	syncBuiltinESMExports();
+	t.after(() => {
+		inflate.mock.restore();
+		syncBuiltinESMExports();
+	});
+	const loaded = new CompanionSkinLibrary(f.libraryPath);
+	assert.equal(loaded.list().length, 5);
+	assert.equal(inflate.mock.callCount(), 0);
+	assert.deepEqual(loaded.get(first.id), first);
+	assert.equal(inflate.mock.callCount(), 1);
+	assert.deepEqual(loaded.get(first.id), first);
+	assert.equal(inflate.mock.callCount(), 1);
+	assert.deepEqual(loaded.get(second.id), second);
+	assert.equal(inflate.mock.callCount(), 2);
+});
+
+test("invalid saved pixel data falls back when selected without hiding healthy packs", (t) => {
+	const f = fixture(t);
+	const good = f.library.import(f.manifest);
+	const corrupt = {
+		version: 1,
+		name: "Damaged",
+		frames: { idle: dataUrl(png({ pixels: Buffer.alloc(17) })) },
+		pixelated: false,
+	};
+	const id = savedId(corrupt);
+	writeFileSync(join(f.libraryPath, `${id}.json`), JSON.stringify(corrupt));
+	const loaded = new CompanionSkinLibrary(f.libraryPath);
+	assert.ok(loaded.list().some((entry) => entry.id === id));
+	assert.equal(loaded.get(id), null);
+	assert.ok(!loaded.list().some((entry) => entry.id === id));
+	assert.deepEqual(loaded.get(good.id), good);
 });
 
 test("stored packs are validated individually and a corrupt pack cannot hide a healthy one", (t) => {
@@ -384,4 +454,76 @@ test("failed persistence does not leave an imported entry in memory", (t) => {
 	writeFileSync(f.libraryPath, "not a directory");
 	assert.throws(() => f.library.import(f.manifest), SAVE_ERROR);
 	assert.equal(f.library.list().length, 3);
+});
+
+test("replacement updates artwork without duplicating the character and removal persists", (t) => {
+	const f = fixture(t);
+	const original = f.library.import(f.manifest);
+	const edited = png({ pixels: Buffer.alloc(18, 1) });
+	writeFileSync(join(f.source, "idle.png"), edited);
+	const replaced = f.library.import(f.manifest, original.id);
+	assert.notEqual(replaced.id, original.id);
+	assert.equal(replaced.frames.idle, dataUrl(edited));
+	assert.equal(f.library.get(original.id), null);
+	assert.equal(f.library.list().length, 4);
+	assert.deepEqual(readdirSync(f.libraryPath), [`${replaced.id}.json`]);
+	const loaded = new CompanionSkinLibrary(f.libraryPath);
+	assert.deepEqual(loaded.get(replaced.id), replaced);
+	assert.equal(loaded.import(f.manifest, replaced.id).id, replaced.id);
+	assert.equal(loaded.remove(replaced.id), true);
+	assert.equal(loaded.get(replaced.id), null);
+	assert.equal(loaded.remove(replaced.id), false);
+	assert.equal(loaded.remove("sprout"), false);
+	assert.equal(new CompanionSkinLibrary(f.libraryPath).list().length, 3);
+	assert.throws(() => loaded.import(f.manifest, "sprout"), REPLACE_ERROR);
+	assert.throws(() => loaded.import(f.manifest, replaced.id), REPLACE_ERROR);
+});
+
+test("a full library permits replacements and identical imports", (t) => {
+	const f = fixture(t);
+	let first;
+	for (let i = 0; i < 64; i++) {
+		const imported = f.library.import(f.write({ name: `Pet ${i}` }));
+		first ??= imported;
+	}
+	assert.equal(f.library.list().length, 67);
+	assert.equal(f.library.import(f.write({ name: "Pet 0" })).id, first.id);
+	f.write({ name: "Updated pet" });
+	assert.throws(() => f.library.import(f.manifest), FULL_ERROR);
+	const replacement = f.library.import(f.manifest, first.id);
+	assert.equal(f.library.list().length, 67);
+	assert.equal(f.library.get(first.id), null);
+	const loaded = new CompanionSkinLibrary(f.libraryPath);
+	assert.deepEqual(loaded.get(replacement.id), replacement);
+	assert.equal(loaded.list().length, 67);
+	const existing = loaded.import(f.write({ name: "Pet 1" }), replacement.id);
+	assert.equal(existing.name, "Pet 1");
+	assert.equal(loaded.list().length, 66);
+	assert.equal(new CompanionSkinLibrary(f.libraryPath).list().length, 66);
+});
+
+test("failed replacement or removal preserves the selected character", (t) => {
+	const f = fixture(t);
+	const original = f.library.import(f.manifest);
+	writeFileSync(join(f.source, "idle.png"), Buffer.from("broken"));
+	assert.throws(() => f.library.import(f.manifest, original.id), PNG_ERROR);
+	assert.deepEqual(f.library.get(original.id), original);
+	writeFileSync(
+		join(f.source, "idle.png"),
+		png({ pixels: Buffer.alloc(18, 1) }),
+	);
+	const saved = join(f.libraryPath, `${original.id}.json`);
+	const backup = join(f.root, "backup.json");
+	renameSync(saved, backup);
+	mkdirSync(saved);
+	assert.throws(() => f.library.remove(original.id), REMOVE_ERROR);
+	assert.throws(() => f.library.import(f.manifest, original.id), SAVE_ERROR);
+	assert.deepEqual(f.library.get(original.id), original);
+	assert.deepEqual(readdirSync(f.libraryPath), [`${original.id}.json`]);
+	rmSync(saved, { recursive: true });
+	renameSync(backup, saved);
+	assert.deepEqual(
+		new CompanionSkinLibrary(f.libraryPath).get(original.id),
+		original,
+	);
 });

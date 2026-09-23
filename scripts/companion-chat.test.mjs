@@ -106,16 +106,47 @@ test("chat creates lazily with defaults and displays accepted prose", async () =
 	assert.deepEqual(Object.keys(f.calls[0]).sort(), ["cwd", "op", "requestId"]);
 	assert.equal(f.calls[0].cwd, "/a/known/directory");
 	assert.equal(f.messages()[0].mode, "prompt");
-	assert.equal(sent.snapshot.status, "idle");
-	assert.equal(sent.snapshot.canSend, true);
+	await f.service.refresh();
+	assert.equal(f.service.snapshot.status, "idle");
+	assert.equal(f.service.snapshot.canSend, true);
 	assert.deepEqual(
-		sent.snapshot.messages.map(({ role, text }) => ({ role, text })),
+		f.service.snapshot.messages.map(({ role, text }) => ({ role, text })),
 		[
 			{ role: "user", text: "Hello" },
 			{ role: "assistant", text: "Hello back" },
 		],
 	);
 });
+
+test(
+	"admission releases the composer without waiting for old or new polls",
+	{ timeout: 2000 },
+	async () => {
+		const f = fixture();
+		await f.service.open(ID);
+		const oldRead = Promise.withResolvers();
+		const nextRead = Promise.withResolvers();
+		let reads = 0;
+		f.handle((input) => {
+			if (input.op !== "sessions.get") return;
+			reads++;
+			if (reads === 1) return oldRead.promise;
+			if (reads === 3) return nextRead.promise;
+		});
+		const poll = f.service.refresh();
+		const sent = await f.service.send("Hello");
+		assert.equal(sent.accepted, true);
+		assert.equal(sent.snapshot.status, "working");
+		assert.equal(reads, 3);
+		oldRead.resolve(frame({ history: [row("old", "assistant", "Old reply")] }));
+		await poll;
+		assert.equal(f.service.snapshot.messages.length, 0);
+		nextRead.resolve(frame({ generation: 1, last_turn_outcome: "completed" }));
+		await f.service.refresh();
+		assert.equal(f.service.snapshot.canSend, true);
+		f.service.dispose();
+	},
+);
 
 test("lost creation reuses its request ID", async () => {
 	const f = fixture();
@@ -267,6 +298,7 @@ test("accepted work needs its own terminal turn, including after an owner change
 		const sent = await f.service.send("My exact task");
 		assert.equal(sent.accepted, true);
 		assert.equal(sent.snapshot.status, "working");
+		await f.service.refresh();
 		f.setFrame(
 			frame({
 				epoch,

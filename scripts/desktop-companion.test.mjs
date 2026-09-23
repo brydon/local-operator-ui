@@ -35,6 +35,21 @@ test("gates take precedence over active work and unopened completions", () => {
 	});
 	assert.equal(select(catalogue(row("ask", "answer"))).mood, "attention");
 });
+
+test("attention identifies the selected task without leaking another task's title", () => {
+	const result = select(
+		catalogue(
+			row("running", "busy", { name: "Background work" }),
+			row("gate", "approval", { name: "  Plan\nmy trip  " }),
+		),
+	);
+	assert.equal(result.sessionId, "gate");
+	assert.equal(result.taskTitle, "Plan my trip");
+	assert.equal(
+		select(catalogue(row("gate", "approval", { name: {} }))).taskTitle,
+		undefined,
+	);
+});
 test("a previous completion receipt cannot make an active turn look finished", () => {
 	assert.equal(select(catalogue(row("a", "busy", unread))).mood, "working");
 	assert.equal(

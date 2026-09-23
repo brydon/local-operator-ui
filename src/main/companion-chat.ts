@@ -317,6 +317,7 @@ export class CompanionChatService {
 		const generation = this.generation;
 		this.sending = true;
 		this.readId++;
+		this.refreshing = null;
 		this.update({ status: "loading", error: null, canSend: false });
 		let accepted = false;
 		let failure =
@@ -389,7 +390,7 @@ export class CompanionChatService {
 				if (this.state.status === "idle") this.update({ canSend: true });
 			}
 		}
-		if (accepted && this.current(generation)) await this.refresh();
+		if (accepted && this.current(generation)) void this.refresh();
 		return outcome(accepted && this.current(generation));
 	}
 

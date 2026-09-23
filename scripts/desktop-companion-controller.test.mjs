@@ -745,6 +745,7 @@ test("native menu stays scoped, cancels drag, and exposes character and hide con
 		(item) => item.label === "Character",
 	).submenu;
 	assert.equal(characters.filter((item) => item.checked).length, 1);
+	assert.ok(characters.find((item) => item.label === "Add character…"));
 	characters.find((item) => item.label === "Pixel").click();
 	assert.equal(f.preferences().character, "pixel");
 	await f.catalogue("busy", "222222222222");
@@ -765,6 +766,33 @@ test("native menu stays scoped, cancels drag, and exposes character and hide con
 	const menusBeforeHide = f.menus.length;
 	f.action("menu");
 	assert.equal(f.menus.length, menusBeforeHide);
+});
+
+test("custom artwork can be replaced and removed through the shared character menu", (t) => {
+	const f = fixture(t);
+	const art = (name) =>
+		join(root, `src/renderer/src/assets/companions/${name}.png`);
+	f.companion.importCharacter(art("sprout"));
+	const first = f.companion.appearance.id;
+	assert.ok(
+		f.companion.characterMenu.find((item) => item.label === "Replace artwork…"),
+	);
+	f.companion.importCharacter(art("hoodie"), first);
+	const replaced = f.companion.appearance.id;
+	assert.notEqual(first, replaced);
+	assert.equal(f.companion.characters.length, 4);
+	assert.equal(f.preferences().character, replaced);
+	const remove = f.companion.characterMenu.find(
+		(item) => item.label === "Remove character",
+	);
+	remove.click();
+	assert.equal(f.companion.appearance.id, "sprout");
+	assert.equal(f.preferences().character, "sprout");
+	assert.equal(f.companion.characters.length, 3);
+	assert.equal(
+		f.companion.characterMenu.some((item) => item.label === "Remove character"),
+		false,
+	);
 });
 
 test("hiding retains the renderer but stops polling, rejects IPC and defeats a late ready event", async (t) => {
@@ -818,6 +846,7 @@ test("fleet changes never retarget inline chat or focus the window", async (t) =
 	f.action("open-task");
 	f.action("expand-chat");
 	assert.deepEqual(f.opened, ["222222222222", "012345abcdef"]);
+	assert.equal(f.chat().open, false);
 	f.action("collapse-chat");
 	f.action("open");
 	await settle();

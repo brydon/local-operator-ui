@@ -109,6 +109,24 @@ function Companion() {
 	const sleeping =
 		reaction === "dozing" &&
 		(state.mood === "idle" || state.mood === "complete");
+	const [failedArt, setFailedArt] = useState({
+		id: appearance.id,
+		sources: [] as string[],
+	});
+	const failedImages = failedArt.id === appearance.id ? failedArt.sources : [];
+	const customImage = [
+		sleeping ? appearance.frames?.sleeping : undefined,
+		appearance.frames?.[state.mood],
+		appearance.frames?.idle,
+	].find((source) => source && !failedImages.includes(source));
+	const affection =
+		reaction === "loved"
+			? `${appearance.name} sends you a heart.`
+			: reaction === "starstruck"
+				? `${appearance.name} lights up with delight.`
+				: reaction === "happy"
+					? `${appearance.name} looks happy.`
+					: "";
 	useEffect(() => {
 		const unsubscribe = window.companion.onMotion(setMotion);
 		const preference = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -264,7 +282,7 @@ function Companion() {
 						}
 					}}
 				>
-					{appearance.frames ? (
+					{customImage ? (
 						<>
 							<img
 								className={cn(
@@ -272,15 +290,20 @@ function Companion() {
 									appearance.pixelated && "companion-custom-pixel",
 									sleeping && "companion-custom-sleeping",
 								)}
-								src={
-									(sleeping ? appearance.frames.sleeping : undefined) ??
-									appearance.frames[state.mood] ??
-									appearance.frames.idle
+								src={customImage}
+								onError={() =>
+									setFailedArt((failed) => ({
+										id: appearance.id,
+										sources: [
+											...(failed.id === appearance.id ? failed.sources : []),
+											customImage,
+										],
+									}))
 								}
 								alt=""
 								draggable={false}
 							/>
-							{sleeping && !appearance.frames.sleeping && (
+							{sleeping && customImage !== appearance.frames?.sleeping && (
 								<svg
 									className={cn("companion-custom-sleep")}
 									viewBox="0 0 26 30"
@@ -312,10 +335,14 @@ function Companion() {
 						className={cn("companion-task-toggle rounded-full")}
 						aria-label={
 							state.mood === "error"
-								? "Review task error"
-								: "Review task request"
+								? `Review task error${state.taskTitle ? `: ${state.taskTitle}` : ""}`
+								: `Review task request${state.taskTitle ? `: ${state.taskTitle}` : ""}`
 						}
-						title={state.label}
+						title={
+							state.taskTitle
+								? `${state.label}: ${state.taskTitle}`
+								: state.label
+						}
 						onClick={() => window.companion.openTask()}
 					>
 						<CircleAlert aria-hidden="true" />
@@ -334,6 +361,9 @@ function Companion() {
 					<MessageCircle aria-hidden="true" />
 				</Button>
 			</div>
+			<output className={cn("sr-only")} aria-live="polite">
+				{affection}
+			</output>
 			<CompanionChat
 				snapshot={chat.snapshot}
 				open={chat.open}

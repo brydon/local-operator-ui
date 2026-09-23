@@ -21,7 +21,6 @@ import {
 	BACKEND_STATUS_CHANNEL,
 	BACKEND_STATUS_EVENT,
 } from "../shared/backend-status";
-import { BUILTIN_COMPANIONS } from "../shared/companion-skin";
 import {
 	type DirectoryListing,
 	type FileActionOutcome,
@@ -435,48 +434,7 @@ function createApplicationMenu(): void {
 				},
 				{
 					label: "Companion character",
-					submenu: [
-						...(desktopCompanion?.characters ?? BUILTIN_COMPANIONS).map(
-							(character) => ({
-								label: character.name,
-								type: "radio" as const,
-								checked:
-									character.id ===
-									(desktopCompanion?.appearance.id ?? "sprout"),
-								click: () => desktopCompanion?.selectCharacter(character.id),
-							}),
-						),
-						{ type: "separator" as const },
-						{
-							label: "Add character…",
-							click: async () => {
-								const chosen = await dialog.showOpenDialog({
-									title: "Add a companion character",
-									buttonLabel: "Add character",
-									properties: ["openFile"],
-									filters: [
-										{
-											name: "Companion character",
-											extensions: ["json", "png"],
-										},
-									],
-								});
-								if (chosen.canceled || !chosen.filePaths[0]) return;
-								try {
-									desktopCompanion?.importCharacter(chosen.filePaths[0]);
-								} catch (error) {
-									await dialog.showMessageBox({
-										type: "error",
-										title: "Character could not be added",
-										message:
-											error instanceof Error
-												? error.message
-												: "Check the character manifest and images.",
-									});
-								}
-							},
-						},
-					],
+					submenu: desktopCompanion?.characterMenu ?? [],
 				},
 				{ type: "separator" as const },
 				{

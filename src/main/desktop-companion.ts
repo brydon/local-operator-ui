@@ -1,6 +1,10 @@
 import { readFileSync, renameSync, writeFileSync } from "node:fs";
-import { BrowserWindow, Menu, ipcMain, screen } from "electron";
-import type { IpcMainEvent, IpcMainInvokeEvent } from "electron";
+import { BrowserWindow, Menu, dialog, ipcMain, screen } from "electron";
+import type {
+	IpcMainEvent,
+	IpcMainInvokeEvent,
+	MenuItemConstructorOptions,
+} from "electron";
 import {
 	BUILTIN_COMPANIONS,
 	type CompanionAppearance,
@@ -114,9 +118,79 @@ export class DesktopCompanion {
 			this.window.webContents.send("companion:appearance", this.appearance);
 	}
 
-	importCharacter(path: string): void {
-		const appearance = this.skins.import(path);
+	importCharacter(path: string, replaceId?: string): void {
+		const appearance = this.skins.import(path, replaceId);
 		this.selectCharacter(appearance.id);
+	}
+
+	get characterMenu(): MenuItemConstructorOptions[] {
+		const selected = this.appearance.id;
+		const custom = !BUILTIN_COMPANIONS.some((item) => item.id === selected);
+		return [
+			...this.characters.map((character) => ({
+				label: character.name,
+				type: "radio" as const,
+				checked: character.id === selected,
+				click: () => this.selectCharacter(character.id),
+			})),
+			{ type: "separator" },
+			{ label: "Add character…", click: () => this.chooseCharacter() },
+			...(custom
+				? [
+						{
+							label: "Replace artwork…",
+							click: () => this.chooseCharacter(selected),
+						},
+						{
+							label: "Remove character",
+							click: () => {
+								try {
+									this.removeCharacter(selected);
+								} catch (error) {
+									void this.showCharacterError(error);
+								}
+							},
+						},
+					]
+				: []),
+		];
+	}
+
+	removeCharacter(id: string): void {
+		if (!this.skins.remove(id)) return;
+		if (this.preferences.character === id)
+			this.selectCharacter(BUILTIN_COMPANIONS[0].id);
+		else this.options.appearanceChanged();
+	}
+
+	private async chooseCharacter(replaceId?: string): Promise<void> {
+		if (this.disposed || this.options.headless) return;
+		try {
+			const chosen = await dialog.showOpenDialog({
+				title: replaceId
+					? "Replace companion artwork"
+					: "Add a companion character",
+				buttonLabel: replaceId ? "Replace artwork" : "Add character",
+				properties: ["openFile"],
+				filters: [{ name: "Companion character", extensions: ["json", "png"] }],
+			});
+			if (this.disposed || chosen.canceled || !chosen.filePaths[0]) return;
+			this.importCharacter(chosen.filePaths[0], replaceId);
+		} catch (error) {
+			await this.showCharacterError(error);
+		}
+	}
+
+	private async showCharacterError(error: unknown): Promise<void> {
+		if (this.disposed || this.options.headless) return;
+		await dialog.showMessageBox({
+			type: "error",
+			title: "Character could not be changed",
+			message:
+				error instanceof Error
+					? error.message
+					: "Check the character manifest and images.",
+		});
 	}
 
 	private trusted(event: IpcMainEvent | IpcMainInvokeEvent): boolean {
@@ -410,18 +484,15 @@ export class DesktopCompanion {
 		Menu.buildFromTemplate([
 			{ label: "Chat", click: () => this.showChat() },
 			{
-				label: "Open task in app",
+				label: this.state.taskTitle
+					? `Open task: ${this.state.taskTitle}`
+					: "Open task in app",
 				enabled: !!this.state.sessionId,
 				click: () => this.options.openChat(this.state.sessionId),
 			},
 			{
 				label: "Character",
-				submenu: this.characters.map((character) => ({
-					label: character.name,
-					type: "radio" as const,
-					checked: character.id === this.appearance.id,
-					click: () => this.selectCharacter(character.id),
-				})),
+				submenu: this.characterMenu,
 			},
 			{ type: "separator" },
 			{ label: "Hide companion", click: () => this.setEnabled(false) },
@@ -452,9 +523,10 @@ export class DesktopCompanion {
 		else if (action === "open-task")
 			this.options.openChat(this.state.sessionId);
 		else if (action === "collapse-chat") this.layoutChat(false);
-		else if (action === "expand-chat")
+		else if (action === "expand-chat") {
 			this.options.openChat(this.chat.snapshot.sessionId);
-		else if (
+			this.layoutChat(false);
+		} else if (
 			action === "new-chat" &&
 			this.chat.snapshot.status !== "working" &&
 			this.chat.snapshot.status !== "loading"
