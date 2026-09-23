@@ -45,6 +45,13 @@ The Local Operator UI is a user interface for managing and interacting with the 
 
 👉 For the agent environment CLI and Server backend, see the [Local Operator GitHub repository](https://github.com/damianvtran/local-operator).
 
+## Desktop companion
+
+Use **View > Desktop companion** to show a floating character that follows task
+progress. Click to pet, use the chat button to talk, drag to move, or right-click
+to hide or change characters.
+Choose Sprout, Hoodie, Pixel, or [add your own character](docs/desktop-companion-packs.md).
+
 ## 🚀 Getting Started
 
 ### Prerequisites
