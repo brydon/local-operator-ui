@@ -346,6 +346,76 @@
 	transform-origin: 50% 40%;
 }
 
+.companion-art-live-face {
+	transform: translate(var(--face-look-x), var(--face-look-y));
+	transition: transform 220ms ease-out;
+}
+
+.companion-art-eye-left {
+	transform-origin: 27.5px 28.5px;
+	transform: scaleY(var(--face-left-open));
+	transition: transform 280ms ease 60ms;
+}
+
+.companion-art-eye-right {
+	transform-origin: 72.5px 28.5px;
+	transform: scaleY(var(--face-right-open));
+	transition: transform 300ms ease 80ms;
+}
+
+.companion-art-live-brows {
+	stroke-width: 3;
+	opacity: 0.7;
+}
+
+.companion-art-brow-left,
+.companion-art-brow-right {
+	transition: transform 320ms ease 100ms;
+}
+
+.companion-art-brow-left {
+	transform: translateY(var(--face-left-brow));
+}
+
+.companion-art-brow-right {
+	transform: translateY(var(--face-right-brow));
+}
+
+.companion-art-live-mouth {
+	fill: currentColor;
+	transition: d 340ms ease 140ms;
+}
+
+.companion-art-cheeks {
+	stroke-width: 3;
+	opacity: 0.55;
+}
+
+.companion-art-task-eye {
+	transform-box: fill-box;
+	transform-origin: center;
+	animation: companion-art-task-blink 7.3s ease-in-out infinite;
+}
+
+.companion-art-task-eye:last-child {
+	animation-delay: 70ms;
+}
+
+.companion-art-task-brows {
+	transform-origin: 50px 16px;
+	animation: companion-art-task-brows 5.8s ease-in-out infinite;
+}
+
+.companion-art:is(
+		[data-expression="working"],
+		[data-expression="attention"],
+		[data-expression="error"]
+	)
+	.companion-art-expression {
+	animation: companion-art-task-look 8.6s ease-in-out infinite;
+}
+
+.companion-art[data-expression="complete"][data-face-beat] .companion-art-eyes,
 .companion-art[data-expression="idle"][data-reaction="rest"]
 	.companion-art-eyes,
 .companion-art[data-expression="idle"][data-reaction="curious"]
@@ -696,12 +766,67 @@
 @keyframes companion-art-blink {
 	0%,
 	43%,
-	47%,
+	46%,
+	49%,
+	77%,
+	86%,
 	100% {
 		transform: scaleY(1);
 	}
-	45% {
+	44.5%,
+	47.5% {
+		transform: scaleY(0.1);
+	}
+	81% {
+		transform: scaleY(0.18);
+	}
+}
+
+@keyframes companion-art-task-blink {
+	0%,
+	27%,
+	32%,
+	58%,
+	90%,
+	100% {
+		transform: scaleY(1);
+	}
+	29% {
 		transform: scaleY(0.12);
+	}
+	67%,
+	73% {
+		transform: scaleY(0.65);
+	}
+}
+
+@keyframes companion-art-task-brows {
+	0%,
+	28%,
+	72%,
+	100% {
+		transform: none;
+	}
+	40%,
+	58% {
+		transform: translateY(-2px) rotate(-2deg);
+	}
+}
+
+@keyframes companion-art-task-look {
+	0%,
+	18%,
+	70%,
+	100% {
+		transform: none;
+	}
+	24%,
+	43% {
+		transform: translate(3px, -1px);
+	}
+	49%,
+	62% {
+		transform: translate(-2px, 1px);
 	}
 }
 
@@ -729,7 +854,16 @@
 			.companion-art-hearts,
 			.companion-art-sprite,
 			.companion-art-foot,
-			.companion-art-face
+			.companion-art-face,
+			.companion-art-expression,
+			.companion-art-live-face,
+			.companion-art-eye-left,
+			.companion-art-eye-right,
+			.companion-art-brow-left,
+			.companion-art-brow-right,
+			.companion-art-live-mouth,
+			.companion-art-task-eye,
+			.companion-art-task-brows
 		) {
 		animation: none;
 		transition: none;
@@ -751,4 +885,9 @@
 	.companion-art-hoodie[data-reaction="landing"] .companion-art-body {
 		visibility: hidden;
 	}
+}
+
+.companion-art[data-paused][data-expression][data-reaction] * {
+	animation-play-state: paused;
+	transition: none;
 }
