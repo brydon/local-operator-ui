@@ -69,20 +69,24 @@ function Ball({ scene }: { scene: CompanionPlayScene }) {
 			const from = animation
 				? getComputedStyle(ball).transform
 				: position.current;
+			const opacity = getComputedStyle(ball).opacity;
 			animation?.cancel();
 			animation = undefined;
 			const x = scene.side === "left" ? -28 : 28;
 			if (scene.phase === "offer") {
 				position.current = "translate(0, 0)";
 				ball.style.transform = position.current;
+				ball.style.opacity = "1";
 				return;
 			}
 			if (preference.matches) {
 				position.current = `translate(${x * 0.65}px, 0)`;
 				ball.style.transform = position.current;
+				ball.style.opacity = scene.phase === "finish" ? "0" : "1";
 				return;
 			}
 			ball.style.transform = from;
+			ball.style.opacity = scene.phase === "playing" ? "1" : opacity;
 			animation = ball.animate(
 				scene.phase === "playing"
 					? [
@@ -94,12 +98,39 @@ function Ball({ scene }: { scene: CompanionPlayScene }) {
 							},
 							{ transform: `translate(${x}px, 18px)` },
 						]
-					: [
-							{ transform: from },
-							{ transform: `translate(${x}px, 65px) rotate(30deg)` },
-						],
+					: scene.phase === "finish"
+						? [
+								{ transform: from, opacity, easing: "ease-out" },
+								{
+									transform: `translate(${x / 2}px, -11px)`,
+									opacity,
+									offset: 0.35,
+									easing: "ease-in",
+								},
+								{
+									transform: `translate(${x}px, 48px) scale(.85)`,
+									opacity,
+									offset: 0.8,
+								},
+								{
+									transform: `translate(${x}px, 50px) scale(.8)`,
+									opacity: 0,
+								},
+							]
+						: [
+								{ transform: from, opacity, easing: "ease-in" },
+								{
+									transform: `translate(${x}px, 65px) rotate(30deg)`,
+									opacity: 0,
+								},
+							],
 				{
-					duration: scene.phase === "playing" ? COMPANION_BOUNCE_DURATION : 500,
+					duration:
+						scene.phase === "playing"
+							? COMPANION_BOUNCE_DURATION
+							: scene.phase === "finish"
+								? 900
+								: 650,
 					fill: "forwards",
 				},
 			);
@@ -108,6 +139,7 @@ function Ball({ scene }: { scene: CompanionPlayScene }) {
 		preference.addEventListener("change", animate);
 		return () => {
 			position.current = getComputedStyle(ball).transform;
+			ball.style.opacity = getComputedStyle(ball).opacity;
 			animation?.cancel();
 			preference.removeEventListener("change", animate);
 		};
@@ -173,8 +205,8 @@ export function CompanionPlayArt({
 			data-character={character}
 			data-step={scene.step}
 		>
-			{scene.kind === "snack" && scene.phase !== "finish" && (
-				<g transform="translate(80 77)">
+			{scene.kind === "snack" && (
+				<g className={cn("companion-play-snack")} transform="translate(80 77)">
 					<ellipse
 						className={cn("companion-play-shadow")}
 						cx="0"
@@ -195,9 +227,7 @@ export function CompanionPlayArt({
 					)}
 				</g>
 			)}
-			{scene.kind === "bounce" && scene.phase !== "finish" && (
-				<Ball scene={scene} />
-			)}
+			{scene.kind === "bounce" && <Ball scene={scene} />}
 			{scene.kind === "guess" &&
 				(["left", "right"] as const).map((side) => (
 					<g

@@ -53,6 +53,9 @@
 .companion-play-art[data-phase="playing"] .companion-play-treat {
 	animation: companion-treat-nibble 700ms ease-in-out;
 }
+.companion-play-art[data-phase="finish"] .companion-play-snack {
+	animation: companion-play-fade 240ms ease-out both;
+}
 .companion-play-crumbs {
 	fill: none;
 	stroke: #efbd62;
@@ -116,10 +119,21 @@
 		transform: translateY(3px) scale(0.9);
 	}
 	25%,
-	80%,
-	to {
+	75% {
 		opacity: 1;
 		transform: translateY(0) scale(1);
+	}
+	to {
+		opacity: 0;
+		transform: translateY(-2px) scale(1);
+	}
+}
+@keyframes companion-play-fade {
+	from {
+		opacity: 1;
+	}
+	to {
+		opacity: 0;
 	}
 }
 @keyframes companion-dream-visit {
@@ -146,6 +160,9 @@
 		opacity: 1;
 	}
 	.companion-play-crumbs {
+		opacity: 0;
+	}
+	.companion-play-art[data-phase="finish"] .companion-play-snack {
 		opacity: 0;
 	}
 	.companion-dream {

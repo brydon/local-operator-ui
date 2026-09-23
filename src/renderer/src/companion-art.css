@@ -1,7 +1,6 @@
 .companion-art {
 	--companion-art-light: #c8fbd7;
 	--companion-art-breath: 4.8s;
-	--companion-art-blink: 6.4s;
 	--companion-art-affection: 1050ms;
 	--companion-art-wriggle: 1.9s;
 	--companion-art-sleep-pose: translateY(5px) rotate(-2deg) scale(1.045, 0.86);
@@ -22,7 +21,6 @@
 
 .companion-art-hoodie {
 	--companion-art-breath: 5.4s;
-	--companion-art-blink: 7.2s;
 	--companion-art-affection: 1150ms;
 	--companion-art-wriggle: 2s;
 	--companion-art-sleep-pose: translateY(5px) rotate(-9deg) scale(0.96, 0.93);
@@ -31,7 +29,6 @@
 
 .companion-art-pixel {
 	--companion-art-breath: 5.6s;
-	--companion-art-blink: 5.8s;
 	--companion-art-affection: 900ms;
 	--companion-art-wriggle: 1.7s;
 	--companion-art-sleep-pose: translateY(3px) rotate(2deg) scaleY(0.92);
@@ -41,7 +38,6 @@
 
 .companion-art-inky {
 	--companion-art-breath: 5.2s;
-	--companion-art-blink: 6.8s;
 	--companion-art-affection: 1200ms;
 	--companion-art-wriggle: 2.2s;
 	--companion-art-sleep-pose: translateY(4px) scale(1.07, 0.85);
@@ -624,23 +620,28 @@
 .companion-art-eye-left {
 	transform-origin: 27.5px 28.5px;
 	transform: scaleY(var(--face-left-open));
-	transition: transform 280ms ease 60ms;
+	transition: transform 180ms ease-out;
 }
 
 .companion-art-eye-right {
 	transform-origin: 72.5px 28.5px;
 	transform: scaleY(var(--face-right-open));
-	transition: transform 300ms ease 80ms;
+	transition: transform 180ms ease-out;
 }
 
 .companion-art-live-brows {
-	stroke-width: 3;
-	opacity: 0.7;
+	stroke-width: 2.5;
+	opacity: 0;
+	transition: opacity 180ms ease-out;
+}
+
+.companion-art-live-face[data-brows] .companion-art-live-brows {
+	opacity: 0.45;
 }
 
 .companion-art-brow-left,
 .companion-art-brow-right {
-	transition: transform 320ms ease 100ms;
+	transition: transform 180ms ease-out;
 }
 
 .companion-art-brow-left {
@@ -657,16 +658,13 @@
 
 .companion-art-face-arrive {
 	transform-origin: 50px 28px;
-	animation: companion-art-face-arrive 180ms ease-out;
+	transform: scaleY(1);
+	transition: transform 180ms ease-out;
 }
 
-@keyframes companion-art-face-arrive {
-	from {
-		transform: scaleY(0.15);
-	}
-	to {
-		transform: scaleY(1);
-	}
+.companion-art[data-face-changing] .companion-art-face-arrive {
+	transform: scaleY(0.08);
+	transition-duration: 100ms;
 }
 
 .companion-art-whistle {
@@ -727,16 +725,6 @@
 	)
 	.companion-art-expression {
 	animation: companion-art-task-look 8.6s ease-in-out infinite;
-}
-
-.companion-art[data-expression="complete"][data-face-beat] .companion-art-eyes,
-.companion-art[data-expression="idle"][data-reaction="rest"]
-	.companion-art-eyes,
-.companion-art[data-expression="idle"][data-reaction="curious"]
-	.companion-art-eyes,
-.companion-art[data-expression="idle"][data-reaction="listening"]
-	.companion-art-eyes {
-	animation: companion-art-blink var(--companion-art-blink) ease-in-out infinite;
 }
 
 .companion-art-hearts {
@@ -1169,25 +1157,6 @@
 	}
 }
 
-@keyframes companion-art-blink {
-	0%,
-	43%,
-	46%,
-	49%,
-	77%,
-	86%,
-	100% {
-		transform: scaleY(1);
-	}
-	44.5%,
-	47.5% {
-		transform: scaleY(0.1);
-	}
-	81% {
-		transform: scaleY(0.18);
-	}
-}
-
 @keyframes companion-art-task-blink {
 	0%,
 	27%,
@@ -1202,7 +1171,7 @@
 	}
 	67%,
 	73% {
-		transform: scaleY(0.65);
+		transform: scaleY(0.85);
 	}
 }
 
@@ -1432,7 +1401,7 @@
 		transform: none;
 	}
 	40% {
-		transform: scaleY(0.65);
+		transform: scaleY(0.85);
 	}
 	47%,
 	54% {
