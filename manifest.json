@@ -73,9 +73,28 @@
       "bytes": 79908,
       "sha256": "f2b14cee162c3608a39de7e05bf1ebacf5d0e5e275c0f8863044b0ea4a762cb8",
       "source": "8ba457724081efca4393763766b40ddb69a78cf9"
+    },
+    {
+      "file": "sprite-compression-comparison.png",
+      "bytes": 599644,
+      "sha256": "28efc6ffaa1de4c6bb18739dd974e536af56e28af37d8292ef86b969c764a314",
+      "source": "166095c11e9067c01e670754c010be8bab998606"
+    },
+    {
+      "file": "sprite-compression-report.json",
+      "bytes": 9163,
+      "sha256": "feb5f3ef52949f8683cf7359c8290bbc11e407d23cc7785156ff10b8b22dfd27",
+      "source": "166095c11e9067c01e670754c010be8bab998606"
+    },
+    {
+      "file": "sprite-compression-audit.json",
+      "bytes": 472704,
+      "sha256": "a11be021c2752f26c6d22a996fb0cb87d2eda7315a80cd76a91a919fa04d7a78",
+      "source": "166095c11e9067c01e670754c010be8bab998606"
     }
   ],
   "integrationSource": "3447db0e2f42cb27413bf6f5901ca0c7df039008",
   "integrationDescription": "Welcome and settings production components with actual preload and trusted controller IPC in a hidden isolated Electron carrier. Compact chief-of-staff chat uses the actual companion renderer with synthetic history and status; no real model request. Companion-dependent source and styles are unchanged by final upstream sync 994c5e190.",
-  "navigationDescription": "Real built companion renderer, preload, controller and service in hidden unfocusable Electron at 8ba457724. Synthetic backend history/status; native menu selection and dismissal scripted. Stills show a preserved draft after returning to chief and a disabled chief notice, not native menu geometry or live model execution."
+  "navigationDescription": "Real built companion renderer, preload, controller and service in hidden unfocusable Electron at 8ba457724. Synthetic backend history/status; native menu selection and dismissal scripted. Stills show a preserved draft after returning to chief and a disabled chief notice, not native menu geometry or live model execution.",
+  "compressionDescription": "Before/after at b9276e6a8 and166095c11. Production CompanionArt and CSS in hidden unfocusable Electron; enlarged frozen animation samples, arranged for comparison. Original30,501,840bytes; compressed9,694,000bytes. RGB is lossy, dimensions and alpha exactly preserved across34assets/244frames. No full-app workflow or runtime-memory reduction claimed."
 }

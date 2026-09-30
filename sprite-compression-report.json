@@ -1,0 +1,382 @@
+{
+  "encoder": "cwebp 1.6.0",
+  "options": "-q 90 (95 for Pixel) -m 6 -sharp_yuv -alpha_q 100 -exact -metadata none",
+  "before": 30501840,
+  "after": 9694000,
+  "files": [
+    {
+      "file": "hoodie-motion.webp",
+      "before": 902296,
+      "after": 278548,
+      "dimensions": [
+        1774,
+        887
+      ],
+      "alphaIdentical": true,
+      "sha256": "9a5ee5cd88bc2fad3cecaf6151267632c6eabf511c54312a92ffd492ec536ca1"
+    },
+    {
+      "file": "hoodie-nap.webp",
+      "before": 943098,
+      "after": 257810,
+      "dimensions": [
+        1774,
+        887
+      ],
+      "alphaIdentical": true,
+      "sha256": "50cdc5f6dc585ceb363254d4fb2e5f0eddd947a9ec4d0ae7400c0a6467e99032"
+    },
+    {
+      "file": "hoodie-paperboat.webp",
+      "before": 941310,
+      "after": 262398,
+      "dimensions": [
+        1774,
+        887
+      ],
+      "alphaIdentical": true,
+      "sha256": "97a00d096f5531d6dbafe9543dacff67bf5f6ee6f50d98a924b4840e57811008"
+    },
+    {
+      "file": "hoodie-peekaboo.webp",
+      "before": 957956,
+      "after": 283576,
+      "dimensions": [
+        1774,
+        887
+      ],
+      "alphaIdentical": true,
+      "sha256": "89cc76555a1fd5d2221ca7caacb2f48b76db5ca33b475c1a9ede9aba6ee0c6a1"
+    },
+    {
+      "file": "hoodie-play.webp",
+      "before": 1017492,
+      "after": 301828,
+      "dimensions": [
+        1774,
+        887
+      ],
+      "alphaIdentical": true,
+      "sha256": "46bf9b3ad5e16235804aff01c6ad5c75ad50ddfd1b013aa81a3ad73bfe0e7f6f"
+    },
+    {
+      "file": "hoodie-relax.webp",
+      "before": 933290,
+      "after": 262438,
+      "dimensions": [
+        1774,
+        887
+      ],
+      "alphaIdentical": true,
+      "sha256": "573f703c1a71c0469fcad86be49348a533fef37e6c5ceb9af061b4178daa9e5d"
+    },
+    {
+      "file": "hoodie-scarf.webp",
+      "before": 1017318,
+      "after": 293488,
+      "dimensions": [
+        1774,
+        887
+      ],
+      "alphaIdentical": true,
+      "sha256": "05fcfcc7a2aa2ee75ebcc6ba90df6ae5696e06578608b2a557a4bf30d6a8d7f7"
+    },
+    {
+      "file": "hoodie.webp",
+      "before": 821022,
+      "after": 190418,
+      "dimensions": [
+        1254,
+        1254
+      ],
+      "alphaIdentical": true,
+      "sha256": "e71e3b0a4aabd25c0b12f4f46fb88255363abfe4be480cc3cfb55936df311b87"
+    },
+    {
+      "file": "inky-bubbles.webp",
+      "before": 969658,
+      "after": 312712,
+      "dimensions": [
+        1774,
+        887
+      ],
+      "alphaIdentical": true,
+      "sha256": "77ac923e05982d1bc179567a764cc86df32e75a32086d6f52acd026128e90cf8"
+    },
+    {
+      "file": "inky-camouflage.webp",
+      "before": 1012144,
+      "after": 303098,
+      "dimensions": [
+        1774,
+        887
+      ],
+      "alphaIdentical": true,
+      "sha256": "ceed6a41cbc7eabd9486436e933a0b55aba09d9fe32e3deaa6a94c1432c75fba"
+    },
+    {
+      "file": "inky-cuddle.webp",
+      "before": 967998,
+      "after": 331524,
+      "dimensions": [
+        1774,
+        887
+      ],
+      "alphaIdentical": true,
+      "sha256": "acc281a7cfb01d3441f805b5692db73f303c72c2f2c41ad88c656cabfe4ae8a2"
+    },
+    {
+      "file": "inky-juggle.webp",
+      "before": 921872,
+      "after": 308568,
+      "dimensions": [
+        1774,
+        887
+      ],
+      "alphaIdentical": true,
+      "sha256": "5e8467c3774d8eb546bf30dc09b61bc9808acb78767263b6cc8f55ffd112267f"
+    },
+    {
+      "file": "inky-leafplay.webp",
+      "before": 924388,
+      "after": 313820,
+      "dimensions": [
+        1774,
+        887
+      ],
+      "alphaIdentical": true,
+      "sha256": "01c7dbd784cdef24517b0e9bd5ee1387010e958bf2fc80c77c5033d2ed0c48a8"
+    },
+    {
+      "file": "inky-motion.webp",
+      "before": 607194,
+      "after": 209946,
+      "dimensions": [
+        1774,
+        887
+      ],
+      "alphaIdentical": true,
+      "sha256": "954b1721f231d019b42d5e106cd4102b57164cc39b210b5d421bf9a5540e34b9"
+    },
+    {
+      "file": "inky-nap.webp",
+      "before": 996020,
+      "after": 319198,
+      "dimensions": [
+        1774,
+        887
+      ],
+      "alphaIdentical": true,
+      "sha256": "8097d94d2c7804e7ee9747e7f16f1f1a6e8b7227adc0651d088299b05cd0a9fb"
+    },
+    {
+      "file": "inky-peekaboo.webp",
+      "before": 1117844,
+      "after": 334998,
+      "dimensions": [
+        1774,
+        887
+      ],
+      "alphaIdentical": true,
+      "sha256": "50e4f4d22d5d0168a421c7d55f55243e3e6ad7bcbc4cf583d1dfb4f7fa350d96"
+    },
+    {
+      "file": "inky-play.webp",
+      "before": 933860,
+      "after": 323884,
+      "dimensions": [
+        1774,
+        887
+      ],
+      "alphaIdentical": true,
+      "sha256": "1b01456fc9135a5a4e2a1c0e51a056a96f3f99a20307397a9e2cf453a083be6a"
+    },
+    {
+      "file": "inky-shell.webp",
+      "before": 1011426,
+      "after": 328854,
+      "dimensions": [
+        1774,
+        887
+      ],
+      "alphaIdentical": true,
+      "sha256": "981f20da0384f103441d4237659d6fed21a1f660369d30666888eda939b4e0e9"
+    },
+    {
+      "file": "inky-suction.webp",
+      "before": 1016252,
+      "after": 313822,
+      "dimensions": [
+        1774,
+        887
+      ],
+      "alphaIdentical": true,
+      "sha256": "1936eed138969733b734b84a1305b98ac4513e4cc63679ec5a496b50bfdf7c6c"
+    },
+    {
+      "file": "inky.webp",
+      "before": 800156,
+      "after": 153640,
+      "dimensions": [
+        1254,
+        1254
+      ],
+      "alphaIdentical": true,
+      "sha256": "7941e4d3c51655d0093905e4801b68e8ee0ad45cb03668dd2053a363e345bc4f"
+    },
+    {
+      "file": "pixel-balance.webp",
+      "before": 992876,
+      "after": 398498,
+      "dimensions": [
+        1774,
+        887
+      ],
+      "alphaIdentical": true,
+      "sha256": "b6175f619266f63b044eb7c9cd89c52212b8a59dd89a3c932d44349109ad1a98"
+    },
+    {
+      "file": "pixel-firefly.webp",
+      "before": 957124,
+      "after": 383160,
+      "dimensions": [
+        1774,
+        887
+      ],
+      "alphaIdentical": true,
+      "sha256": "a503266c65a1ce6296c11f378a862d55c5de71880b867e376d36eb88976892f4"
+    },
+    {
+      "file": "pixel-lens.webp",
+      "before": 956474,
+      "after": 373184,
+      "dimensions": [
+        1774,
+        887
+      ],
+      "alphaIdentical": true,
+      "sha256": "53b55c1c96bfdab6785169e549fd39b59e49aeb74c4fe92e0db88bde0e1754ea"
+    },
+    {
+      "file": "pixel-nap.webp",
+      "before": 916212,
+      "after": 354874,
+      "dimensions": [
+        1774,
+        887
+      ],
+      "alphaIdentical": true,
+      "sha256": "9241056b37cb99fa7202ca793d80250f67a64ef8516ecf986da794a63edbfd29"
+    },
+    {
+      "file": "pixel-peekaboo.webp",
+      "before": 846616,
+      "after": 335120,
+      "dimensions": [
+        1774,
+        887
+      ],
+      "alphaIdentical": true,
+      "sha256": "cf07d1658c920789d8296a330bcbebcc9cc547691176ce856ede6a5a61ece0e3"
+    },
+    {
+      "file": "pixel-play.webp",
+      "before": 974864,
+      "after": 394874,
+      "dimensions": [
+        1774,
+        887
+      ],
+      "alphaIdentical": true,
+      "sha256": "118154d11f4cdc541041210bdd79e1c051215066bfc96f0915bd141641bca657"
+    },
+    {
+      "file": "pixel.webp",
+      "before": 481326,
+      "after": 127518,
+      "dimensions": [
+        1254,
+        1254
+      ],
+      "alphaIdentical": true,
+      "sha256": "7e81a39ceae7fd00bbea9c9cd3dde6ddad887b1181ade11a9898e36166eb2797"
+    },
+    {
+      "file": "sprout-bloom.webp",
+      "before": 868966,
+      "after": 266596,
+      "dimensions": [
+        1774,
+        887
+      ],
+      "alphaIdentical": true,
+      "sha256": "77ab3810c4f2fa7900aa214571a6d15f95f9371ddedcc1ccdc3be95d8f58ccbc"
+    },
+    {
+      "file": "sprout-dew.webp",
+      "before": 804688,
+      "after": 254844,
+      "dimensions": [
+        1774,
+        887
+      ],
+      "alphaIdentical": true,
+      "sha256": "d258e1f0b30f601ceab381261f6f5cad197dca2e84daf054e1778d9b96a231f3"
+    },
+    {
+      "file": "sprout-nap.webp",
+      "before": 724232,
+      "after": 237032,
+      "dimensions": [
+        1774,
+        887
+      ],
+      "alphaIdentical": true,
+      "sha256": "bdd427c156fedfafd810edb4fb40b3df6a21f6d23fa21fb86dfce530ee189e86"
+    },
+    {
+      "file": "sprout-peekaboo.webp",
+      "before": 918972,
+      "after": 266160,
+      "dimensions": [
+        1774,
+        887
+      ],
+      "alphaIdentical": true,
+      "sha256": "c170ac42e9f60032ab5cca128fd454798812c3efdd7499a5a39c124975f8662c"
+    },
+    {
+      "file": "sprout-play.webp",
+      "before": 817802,
+      "after": 266918,
+      "dimensions": [
+        1774,
+        887
+      ],
+      "alphaIdentical": true,
+      "sha256": "c909f7a620c023b5150ee6564a54d612ca24f41d28a6bd5933fdc6ad638a2227"
+    },
+    {
+      "file": "sprout-spin.webp",
+      "before": 787924,
+      "after": 237184,
+      "dimensions": [
+        1774,
+        887
+      ],
+      "alphaIdentical": true,
+      "sha256": "c9d21dd4f88db76be0e4f8e05695e2e4691b362d72efef8b8d271d1e5c9e0be3"
+    },
+    {
+      "file": "sprout.webp",
+      "before": 641170,
+      "after": 113470,
+      "dimensions": [
+        1254,
+        1254
+      ],
+      "alphaIdentical": true,
+      "sha256": "c39cf86e743ca36bfcc0d4c2d0e8c6b7b4e72576ae8bd85fde6566aa5f18236a"
+    }
+  ]
+}
