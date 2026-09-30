@@ -61,8 +61,21 @@
       "bytes": 157559,
       "sha256": "e4c2a790ecc98a69c8abc9676ab6ab18d8248b6330a16a66cd53b593c7514989",
       "source": "3447db0e2f42cb27413bf6f5901ca0c7df039008"
+    },
+    {
+      "file": "companion-chief-return-draft.png",
+      "bytes": 70006,
+      "sha256": "1abba1c3ecf02cff924c5f2f0df849ff83402ce71041c56033f9052bf2e463fa",
+      "source": "8ba457724081efca4393763766b40ddb69a78cf9"
+    },
+    {
+      "file": "companion-chief-disabled-draft.png",
+      "bytes": 79908,
+      "sha256": "f2b14cee162c3608a39de7e05bf1ebacf5d0e5e275c0f8863044b0ea4a762cb8",
+      "source": "8ba457724081efca4393763766b40ddb69a78cf9"
     }
   ],
   "integrationSource": "3447db0e2f42cb27413bf6f5901ca0c7df039008",
-  "integrationDescription": "Welcome and settings production components with actual preload and trusted controller IPC in a hidden isolated Electron carrier. Compact chief-of-staff chat uses the actual companion renderer with synthetic history and status; no real model request. Companion-dependent source and styles are unchanged by final upstream sync 994c5e190."
+  "integrationDescription": "Welcome and settings production components with actual preload and trusted controller IPC in a hidden isolated Electron carrier. Compact chief-of-staff chat uses the actual companion renderer with synthetic history and status; no real model request. Companion-dependent source and styles are unchanged by final upstream sync 994c5e190.",
+  "navigationDescription": "Real built companion renderer, preload, controller and service in hidden unfocusable Electron at 8ba457724. Synthetic backend history/status; native menu selection and dismissal scripted. Stills show a preserved draft after returning to chief and a disabled chief notice, not native menu geometry or live model execution."
 }
