@@ -1,0 +1,42 @@
+{
+  "characterSource": "afed780706bdeba9599f4b27ac460344a9afd612",
+  "nativeSource": "a42b61e86b1092e45d12c3cc042e27cce9e04025",
+  "description": "Actual companion artwork in an arranged preview; actual Electron chat with synthetic task/message data. These are showcase media, not live model execution.",
+  "files": [
+    {
+      "file": "compact-chat.png",
+      "bytes": 59223,
+      "sha256": "fa5638fe684eadc2cd8ad14be8be2672cc122554d9f1f348d9a1814908cb0eed"
+    },
+    {
+      "file": "companion-chat.gif",
+      "bytes": 808763,
+      "sha256": "c068c14986cb220791a533eefc8cb572f01a5fe5180cff3ca8f58f1642b6bd8a"
+    },
+    {
+      "file": "companion-chat.mp4",
+      "bytes": 127354,
+      "sha256": "a81b58cc414940c5473df617bc22f981816e0e0492b03f72194e0bb4111d79fe"
+    },
+    {
+      "file": "companion-overview.png",
+      "bytes": 223386,
+      "sha256": "923d522e22e869365f29f80bd339bcd2d5f861f47c6830b19c816520aedd053b"
+    },
+    {
+      "file": "companion-personalities.gif",
+      "bytes": 4332034,
+      "sha256": "08366c63b26e225de4db5ad7de8d17ba82799645a612db924e6dea1154d10642"
+    },
+    {
+      "file": "companion-personalities.mp4",
+      "bytes": 803488,
+      "sha256": "24586c8cc6b40091030881909292f17a84b3dbaec137a33cbeb27b3e47d12c40"
+    },
+    {
+      "file": "task-attention.png",
+      "bytes": 74636,
+      "sha256": "6b873a3749bb00e707a0df6a5308cba8ba49501255793143f60ce54ed98ba3e5"
+    }
+  ]
+}

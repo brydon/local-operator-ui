@@ -1,0 +1,9 @@
+# Desktop companion showcase
+
+Media for the Local Operator desktop companion pull request. Kept on a separate branch so presentation files do not enter the product diff.
+
+- **Character reel (24.6 seconds):** arranged preview of the unmodified React artwork, enlarged and at normal desktop size. The product displays one selected companion at a time.
+- **Chat demo (12.5 seconds):** actual Electron controller, preload, and renderer; sample local tasks and a synthetic assistant reply. Demonstrates compact input, reply, notifications, and a draft surviving collapse.
+- **Screenshots:** the four character choices, compact chat, and local task attention.
+
+Captured in isolated, hidden, unfocusable macOS Electron windows without real user content or model requests. Character artwork is identical in both source commits named in manifest.json. Clips are silent. All media files are below 10 MB.
