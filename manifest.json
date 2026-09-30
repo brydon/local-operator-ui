@@ -37,6 +37,32 @@
       "file": "task-attention.png",
       "bytes": 74636,
       "sha256": "6b873a3749bb00e707a0df6a5308cba8ba49501255793143f60ce54ed98ba3e5"
+    },
+    {
+      "file": "companion-chief-chat.png",
+      "bytes": 78626,
+      "sha256": "fae8ab2a5e06ea46ed39d1531e6e2aac8c0df5147ebe8f8af570055790874def",
+      "source": "3447db0e2f42cb27413bf6f5901ca0c7df039008"
+    },
+    {
+      "file": "companion-settings-narrow.png",
+      "bytes": 133635,
+      "sha256": "072a858ffb86eae33af7af00cdafb52a8bf3ddceb6e182d980a42d559e19c815",
+      "source": "3447db0e2f42cb27413bf6f5901ca0c7df039008"
+    },
+    {
+      "file": "companion-settings.png",
+      "bytes": 128050,
+      "sha256": "a458120286dd7079801bba5fb41b15452c64ae3092cd286b0e911931ed0849ba",
+      "source": "3447db0e2f42cb27413bf6f5901ca0c7df039008"
+    },
+    {
+      "file": "companion-welcome.png",
+      "bytes": 157559,
+      "sha256": "e4c2a790ecc98a69c8abc9676ab6ab18d8248b6330a16a66cd53b593c7514989",
+      "source": "3447db0e2f42cb27413bf6f5901ca0c7df039008"
     }
-  ]
+  ],
+  "integrationSource": "3447db0e2f42cb27413bf6f5901ca0c7df039008",
+  "integrationDescription": "Welcome and settings production components with actual preload and trusted controller IPC in a hidden isolated Electron carrier. Compact chief-of-staff chat uses the actual companion renderer with synthetic history and status; no real model request. Companion-dependent source and styles are unchanged by final upstream sync 994c5e190."
 }
